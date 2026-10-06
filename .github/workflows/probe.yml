@@ -1,0 +1,31 @@
+name: Probe versions
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/probe.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Maven metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          meta() { echo "== $1"; curl -s "$2/maven-metadata.xml" | grep -oE '<(latest|release|version)>[^<]+' | sed 's/<[a-z]*>//' | tr '\n' ' ' | tail -c 1500; echo; }
+          {
+            meta roborazzi https://repo1.maven.org/maven2/io/github/takahirom/roborazzi/roborazzi
+            meta robolectric https://repo1.maven.org/maven2/org/robolectric/robolectric
+            meta compose-bom https://dl.google.com/android/maven2/androidx/compose/compose-bom
+            meta kotlin https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib
+            meta agp https://dl.google.com/android/maven2/com/android/tools/build/gradle
+            fc-list | grep -ciE 'cjk|nanum|noto sans kr' || true
+          } > versions.txt
+          cat versions.txt
+          gh release view ci-log -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create ci-log -R "$GITHUB_REPOSITORY" --prerelease --title "CI 로그" --notes "마지막 빌드 로그"
+          gh release upload ci-log versions.txt --clobber -R "$GITHUB_REPOSITORY"
