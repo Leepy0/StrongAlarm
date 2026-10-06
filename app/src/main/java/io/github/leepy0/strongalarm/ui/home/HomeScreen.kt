@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -356,12 +357,13 @@ private fun Legend() {
         LegendText("쉼")
         Box(Modifier.size(8.dp).clip(CircleShape).background(Palette.Ink))
         LegendText("시각 바꾼 날")
+        // 오늘 칸과 같은 모양(둥근 사각형)
         Box(
             Modifier
-                .size(12.dp)
-                .clip(MaterialTheme.shapes.extraSmall)
+                .size(width = 12.dp, height = 14.dp)
+                .clip(RoundedCornerShape(3.dp))
                 .background(Palette.DuskHigh)
-                .border(1.5.dp, Palette.Ink, MaterialTheme.shapes.extraSmall),
+                .border(1.5.dp, Palette.Ink, RoundedCornerShape(3.dp)),
         )
         LegendText("오늘")
     }

@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.leepy0.strongalarm.R
@@ -158,8 +159,9 @@ private fun VolumeRow(volume: Int, previewing: Boolean, onVolume: (Int) -> Unit,
                     thumbColor = Palette.Sun,
                     activeTrackColor = Palette.Sun,
                     inactiveTrackColor = Palette.Line,
-                    activeTickColor = Palette.SunInk,
-                    inactiveTickColor = Palette.Mist,
+                    // 10% 단위 눈금 점은 숨김 (값은 오른쪽 위 숫자로 확인)
+                    activeTickColor = Color.Transparent,
+                    inactiveTickColor = Color.Transparent,
                 ),
                 modifier = Modifier.weight(1f),
             )
