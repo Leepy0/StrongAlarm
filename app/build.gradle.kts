@@ -47,10 +47,19 @@ android {
 
     // 사이드로드 전용: Play 정책성 lint(USE_EXACT_ALARM 등)로 release 빌드가 막히지 않도록
     lint { checkReleaseBuilds = false }
+
+    // 스크린샷 테스트(Robolectric)에서 리소스 사용
+    testOptions { unitTests { isIncludeAndroidResources = true } }
 }
 
 kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+}
+
+// 스크린샷을 항상 기록 모드로 저장, 한글 폰트는 CI가 받아둔 파일 사용
+tasks.withType<Test>().configureEach {
+    systemProperty("roborazzi.test.record", "true")
+    systemProperty("screenshot.font", rootProject.file(".ci-fonts/NotoSansKR.ttf").absolutePath)
 }
 
 dependencies {
@@ -71,4 +80,12 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.play.services.wearable)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

@@ -16,7 +16,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +46,28 @@ jobs:
             --title "최신 빌드 (${GITHUB_SHA::7})" \
             --notes "main ${GITHUB_SHA::7} debug 빌드. 폰: StrongAlarm-phone.apk / 워치: StrongAlarm-watch.apk"
 
+      # 화면 스크린샷 (Robolectric) — 실패해도 APK 게시에는 영향 없음
+      - name: Screenshots
+        id: shots
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          mkdir -p .ci-fonts
+          curl -sSL -o .ci-fonts/NotoSansKR.ttf "https://github.com/google/fonts/raw/main/ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf" || true
+          ./gradlew --no-daemon :app:testDebugUnitTest 2>&1 | tee shots.log
+
+      - name: Publish screenshots
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete screenshots --yes --cleanup-tag || true
+          files=$(ls app/build/screenshots/*.png 2>/dev/null || true)
+          if [ -n "$files" ]; then
+            gh release create screenshots $files --target "$GITHUB_SHA" --prerelease \
+              --title "화면 스크린샷 (${GITHUB_SHA::7})" --notes "Robolectric 렌더링"
+          fi
+
       # 성공·실패와 관계없이 빌드 로그 보관
       - name: Publish log
         if: always()
@@ -53,6 +75,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           [ -f build.log ] || echo "build.log 없음" > build.log
+          [ -f shots.log ] || echo "shots.log 없음" > shots.log
           gh release view ci-log >/dev/null 2>&1 || \
             gh release create ci-log --prerelease --title "CI 로그" --notes "마지막 빌드 로그"
-          gh release upload ci-log build.log --clobber
+          gh release upload ci-log build.log shots.log --clobber

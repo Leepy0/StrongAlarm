@@ -14,6 +14,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 
@@ -69,18 +70,28 @@ class WatchMainActivity : ComponentActivity() {
             appendLine("강력한 알람 (워치)")
             appendLine()
             appendLine("권한: ${if (ok) "허용됨" else "필요"}")
-            appendLine("배터리 최적화 제외: ${if (battery) "예" else "아니오"}")
+            appendLine("배터리 최적화 제외: ${if (battery) "예" else "아니오 (선택)"}")
             appendLine()
             append("폰에서 알람이 울리면 진동하고 걸음 수를 폰으로 보냄")
         }
     }
 
+    /**
+     * 워치는 요청 다이얼로그를 지원하지 않는 경우가 많음 → 최적화 목록 → 앱 정보 순으로 폴백.
+     * 모두 실패하면 직접 경로 안내 (필수 아님: 막혀도 정확한 알람 경유로 서비스 시작)
+     */
     @SuppressLint("BatteryLife")
     private fun requestBatteryExemption() {
-        runCatching {
-            startActivity(
-                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")),
-            )
+        val pkg = Uri.parse("package:$packageName")
+        val candidates = listOf(
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, pkg),
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg),
+        )
+        // 지원하지 않는 화면이면 ActivityNotFoundException → 다음 후보
+        val opened = candidates.any { intent -> runCatching { startActivity(intent) }.isSuccess }
+        if (!opened) {
+            Toast.makeText(this, "워치 설정 > 애플리케이션 > 강력한 알람 > 배터리에서 변경", Toast.LENGTH_LONG).show()
         }
     }
 }
