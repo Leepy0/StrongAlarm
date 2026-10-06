@@ -59,11 +59,15 @@ class AlarmPlannerTest {
         assertEquals(1, DimRamp.levelAt(-5, 0, 900, 100))
     }
 
-    @Test fun volumeRampSteps() {
-        assertEquals(0.7f, VolumeRamp.fractionAt(0), 0f)
-        assertEquals(0.7f, VolumeRamp.fractionAt(VolumeRamp.INTERVAL_MS - 1), 0f)
-        assertEquals(0.85f, VolumeRamp.fractionAt(VolumeRamp.INTERVAL_MS), 0f)
-        assertEquals(1.0f, VolumeRamp.fractionAt(VolumeRamp.INTERVAL_MS * 10), 0f)
+    @Test fun countdownText() {
+        val min = 60_000L
+        assertEquals("곧", Countdown.text(0))
+        assertEquals("1분", Countdown.text(1_000))
+        assertEquals("15분", Countdown.text(15 * min))
+        assertEquals("6시간 15분", Countdown.text((6 * 60 + 14) * min + 30_000))
+        assertEquals("2시간", Countdown.text(120 * min))
+        assertEquals("1일 3시간", Countdown.text((27 * 60 + 20) * min))
+        assertEquals("2일", Countdown.text(48 * 60 * min))
     }
 
     @Test fun wearIntCodec() {

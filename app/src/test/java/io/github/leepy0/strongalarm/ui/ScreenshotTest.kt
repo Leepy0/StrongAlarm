@@ -82,7 +82,8 @@ class ScreenshotTest {
 
     // ── 가짜 데이터 ──
     private val today = LocalDate.of(2026, 10, 7)
-    private val NOW = 1_791_000_000_000L
+    /** 2026-10-07 22:45 KST */
+    private val NOW = 1791380700000L
     private val seven = LocalTime.of(7, 0)
 
     private fun day(offset: Long, ring: Boolean, label: String, reason: String, overridden: Boolean = false, time: LocalTime = seven) =
@@ -107,7 +108,7 @@ class ScreenshotTest {
 
     private val home = HomeUiState(
         today = today,
-        next = NextAlarm(today.plusDays(1), seven, "평일이에요"),
+        next = NextAlarm(today.plusDays(1), seven, "평일이에요", ringAt = NOW + (8 * 60 + 15) * 60_000L),
         baseTime = seven,
         days = days,
         ringing = false,
@@ -172,7 +173,7 @@ class ScreenshotTest {
     }
 
     @Test fun settings() = shot("06_settings") {
-        SettingsScreen(SettingsUiState(stepGoal = 30, lightsSummary = "3개", missingPermissions = 1), {}, {}, {}, {}, {})
+        SettingsScreen(SettingsUiState(stepGoal = 30, alarmVolume = 80, lightsSummary = "3개", missingPermissions = 1), {}, {}, {}, {}, {}, {}, {})
     }
 
     @Test fun lightsConnected() = shot("07_lights") { LightsScreen(lights, {}, { _, _, _ -> }, {}, {}, {}, {}, {}, {}) }
@@ -240,7 +241,7 @@ class ScreenshotTest {
     }
 
     @Test fun settingsLight() = shot("23_settings_light", dark = false) {
-        SettingsScreen(SettingsUiState(stepGoal = 30, lightsSummary = "3개", missingPermissions = 1), {}, {}, {}, {}, {})
+        SettingsScreen(SettingsUiState(stepGoal = 30, alarmVolume = 80, lightsSummary = "3개", missingPermissions = 1), {}, {}, {}, {}, {}, {}, {})
     }
 
     @Test fun daySheetLight() = shot("24_day_sheet_light", dark = false) {

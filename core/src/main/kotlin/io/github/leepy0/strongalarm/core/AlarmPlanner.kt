@@ -48,13 +48,18 @@ object DimRamp {
     }
 }
 
-object VolumeRamp {
-    /** 시작 70% → 5분마다 상향 → 100% 유지 */
-    val STEPS = floatArrayOf(0.7f, 0.85f, 1.0f)
-    const val INTERVAL_MS = 5 * 60_000L
-
-    fun fractionAt(elapsedMs: Long): Float {
-        val idx = (elapsedMs.coerceAtLeast(0) / INTERVAL_MS).toInt().coerceAtMost(STEPS.lastIndex)
-        return STEPS[idx]
+/** 남은 시간 문구: "6시간 15분", "1일 3시간", "12분". 분은 올림(0분 표시 방지) */
+object Countdown {
+    fun text(diffMs: Long): String {
+        if (diffMs <= 0) return "곧"
+        val totalMin = (diffMs + 59_999) / 60_000
+        val days = totalMin / (24 * 60)
+        val hours = totalMin % (24 * 60) / 60
+        val mins = totalMin % 60
+        return when {
+            days > 0 -> if (hours > 0) "${days}일 ${hours}시간" else "${days}일"
+            hours > 0 -> if (mins > 0) "${hours}시간 ${mins}분" else "${hours}시간"
+            else -> "${mins}분"
+        }
     }
 }

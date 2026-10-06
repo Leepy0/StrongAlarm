@@ -11,8 +11,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -25,9 +32,14 @@ import io.github.leepy0.strongalarm.ui.components.RowItem
 import io.github.leepy0.strongalarm.ui.components.ScreenPadding
 import io.github.leepy0.strongalarm.ui.components.SectionLabel
 import io.github.leepy0.strongalarm.ui.theme.Palette
+import kotlin.math.roundToInt
 
 data class SettingsUiState(
     val stepGoal: Int,
+    /** 알람 크기 % (10~100) */
+    val alarmVolume: Int = 100,
+    /** 미리 듣기 재생 중 */
+    val previewing: Boolean = false,
     /** null = 조명 미사용 */
     val lightsSummary: String?,
     val missingPermissions: Int,
@@ -37,6 +49,8 @@ data class SettingsUiState(
 fun SettingsScreen(
     state: SettingsUiState,
     onStepGoal: (Int) -> Unit,
+    onVolume: (Int) -> Unit,
+    onPreview: () -> Unit,
     onOpenLights: () -> Unit,
     onOpenPermissions: () -> Unit,
     onTestAlarm: () -> Unit,
@@ -56,6 +70,11 @@ fun SettingsScreen(
             color = Palette.Ink,
             modifier = Modifier.padding(top = 32.dp),
         )
+
+        Column {
+            SectionLabel("소리")
+            Group { VolumeRow(state.alarmVolume, state.previewing, onVolume, onPreview) }
+        }
 
         Column {
             SectionLabel("알람 끄기")
@@ -102,6 +121,50 @@ fun SettingsScreen(
                 )
                 GroupDivider()
                 RowItem(title = "기록", subtitle = "판정, 울림, 해제, 조명 동작", onClick = onOpenHistory)
+            }
+        }
+    }
+}
+
+/** 알람 크기: 10% 단위 슬라이더 + 미리 듣기. 바꾸는 즉시 저장, 미리 듣는 중이면 바로 반영 */
+@Composable
+private fun VolumeRow(volume: Int, previewing: Boolean, onVolume: (Int) -> Unit, onPreview: () -> Unit) {
+    var v by remember(volume) { mutableFloatStateOf(volume.toFloat()) }
+    Column(Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp)) {
+        Row(Modifier.padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("알람 크기", style = MaterialTheme.typography.bodyLarge, color = Palette.Ink)
+                Text(
+                    "처음부터 이 크기로 울려요. 끄면 원래 볼륨으로 돌아가요.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Palette.Mist,
+                )
+            }
+            Text("${v.roundToInt()}%", style = MaterialTheme.typography.titleMedium, color = Palette.Ink)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Slider(
+                value = v,
+                onValueChange = {
+                    val stepped = (it / 10f).roundToInt() * 10f
+                    if (stepped != v) {
+                        v = stepped
+                        onVolume(stepped.roundToInt())
+                    }
+                },
+                valueRange = 10f..100f,
+                steps = 8,
+                colors = SliderDefaults.colors(
+                    thumbColor = Palette.Sun,
+                    activeTrackColor = Palette.Sun,
+                    inactiveTrackColor = Palette.Line,
+                    activeTickColor = Palette.SunInk,
+                    inactiveTickColor = Palette.Mist,
+                ),
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onPreview, modifier = Modifier.padding(start = 8.dp)) {
+                Text(if (previewing) "멈춤" else "미리 듣기", color = Palette.Ink)
             }
         }
     }

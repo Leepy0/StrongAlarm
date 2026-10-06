@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,6 +55,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.leepy0.strongalarm.R
 import io.github.leepy0.strongalarm.alarm.AlarmScheduler
+import io.github.leepy0.strongalarm.alarm.AlarmSound
 import io.github.leepy0.strongalarm.alarm.AlarmSession
 import io.github.leepy0.strongalarm.alarm.WatchLink
 import io.github.leepy0.strongalarm.core.DayOffRule
@@ -180,13 +182,23 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
         if (runtime != null) launcher.launch(arrayOf(runtime)) else openPermissionSettings(ctx, key)
     }
 
-    // ── 2주 판정 ──
-    val today = remember(tick) { LocalDate.now() }
+    // ── 현재 시각: 남은 시간 표시용, 분이 바뀔 때마다 갱신 ──
+    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(tick) {
+        while (true) {
+            nowMillis = System.currentTimeMillis()
+            delay(60_000 - nowMillis % 60_000 + 50)
+        }
+    }
+
+    // ── 이번 주·다음 주 판정 (오늘 ~ 다음 주 일요일) ──
+    val today = remember(tick, nowMillis) { LocalDate.now() }
     var judgements by remember { mutableStateOf<List<Judgement>>(emptyList()) }
     LaunchedEffect(settings, appState.next, today) {
+        val count = 14L - (today.dayOfWeek.value - 1)
         judgements = withContext(Dispatchers.IO) {
-            val judge = AlarmScheduler.judgeFunction(ctx, today, 15)
-            (0L until 14L).map { judge(today.plusDays(it)) }
+            val judge = AlarmScheduler.judgeFunction(ctx, today, count.toInt() + 1)
+            (0L until count).map { judge(today.plusDays(it)) }
         }
     }
     val days = judgements.map { it.toCell(settings) }
@@ -220,6 +232,8 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
     var loadingDevices by remember { mutableStateOf(false) }
     var lightTestState by remember { mutableStateOf<LightTestState?>(null) }
     var lightTestJob by remember { mutableStateOf<Job?>(null) }
+    var previewSound by remember { mutableStateOf<AlarmSound?>(null) }
+    var previewJob by remember { mutableStateOf<Job?>(null) }
 
     // ── 시트·다이얼로그 상태 ──
     var sheetDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -281,6 +295,31 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
         }
         AlarmScheduler.scheduleTest(ctx, 10_000)
         notify("10초 뒤 울려요. 화면을 꺼두고 기다려보세요.")
+    }
+
+    /** 알람 소리 미리 듣기 (4초). 다시 누르면 멈춤. 끝나면 원래 볼륨 복구 */
+    fun togglePreview() {
+        previewJob?.let {
+            it.cancel()
+            return
+        }
+        if (alarm.phase == AlarmSession.UiPhase.RINGING || alarm.phase == AlarmSession.UiPhase.PAUSED) {
+            notify("알람이 울리는 중이에요")
+            return
+        }
+        previewJob = scope.launch {
+            val s = AlarmSound(ctx)
+            previewSound = s
+            try {
+                s.setVolume(Stores.settings.get(ctx).alarmVolume / 100f)
+                s.start()
+                delay(4_000)
+            } finally {
+                s.stop()
+                previewSound = null
+                previewJob = null
+            }
+        }
     }
 
     /** 조명 테스트: 진행률 표시, 취소해도 원래 밝기로 복구 */
@@ -431,6 +470,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                                     date = date,
                                     time = LocalTime.parse(p.time),
                                     reason = judgements.firstOrNull { it.date == date }?.sentence() ?: p.reason,
+                                    ringAt = p.ringAt,
                                 )
                             }
                             HomeScreen(
@@ -453,7 +493,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                                         lastResultAt = appState.lastResultAt,
                                         lightsAuthError = appState.lightsAuthError,
                                     ),
-                                    nowMillis = remember(tick, appState) { System.currentTimeMillis() },
+                                    nowMillis = nowMillis,
                                 ),
                                 onDayClick = { sheetDate = it },
                                 onEditBaseTime = { timeTarget = TimeTarget.Base },
@@ -480,6 +520,8 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                         Tab.SETTINGS -> SettingsScreen(
                             state = SettingsUiState(
                                 stepGoal = settings.stepGoal,
+                                alarmVolume = settings.alarmVolume,
+                                previewing = previewSound != null,
                                 lightsSummary = when {
                                     !loggedIn -> null
                                     appState.lightsAuthError -> "다시 로그인 필요"
@@ -489,6 +531,12 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                                 missingPermissions = missingPermissions,
                             ),
                             onStepGoal = { v -> save { it.copy(stepGoal = v) } },
+                            onVolume = { v ->
+                                // 판정과 무관하므로 재등록 없이 저장, 미리 듣는 중이면 즉시 반영
+                                Stores.settings.update(ctx) { it.copy(alarmVolume = v) }
+                                previewSound?.setVolume(v / 100f)
+                            },
+                            onPreview = ::togglePreview,
                             onOpenLights = { sub = Sub.LIGHTS },
                             onOpenPermissions = { sub = Sub.PERMISSIONS },
                             onTestAlarm = ::testAlarm,

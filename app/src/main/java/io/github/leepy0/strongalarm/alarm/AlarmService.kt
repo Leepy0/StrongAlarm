@@ -18,7 +18,6 @@ import io.github.leepy0.strongalarm.alarm.AlarmSession.UiPhase
 import io.github.leepy0.strongalarm.alarm.AlarmSession.UiState
 import io.github.leepy0.strongalarm.core.AlarmPlanner
 import io.github.leepy0.strongalarm.core.DimRamp
-import io.github.leepy0.strongalarm.core.VolumeRamp
 import io.github.leepy0.strongalarm.core.WearProtocol
 import io.github.leepy0.strongalarm.data.HistoryLog
 import io.github.leepy0.strongalarm.data.Phase
@@ -243,8 +242,9 @@ class AlarmService : Service() {
         getSystemService(NotificationManager::class.java).cancel(Notifications.ID_PREP)
         launchActivityIfAllowed()
 
+        // 설정한 크기로 고정 (점점 커지는 방식 없음)
         sound = AlarmSound(this).also {
-            it.setVolume(VolumeRamp.fractionAt(0))
+            it.setVolume(settings.alarmVolume.coerceIn(10, 100) / 100f)
             it.start()
         }
         startVibration()
@@ -263,14 +263,6 @@ class AlarmService : Service() {
         ringJobs += scope.launch {
             delay(60_000)
             if (AlarmSession.state.value.steps == 0) log("1분째 걸음 0 — ${stepDiagnosis()}")
-        }
-
-        // 5분마다 볼륨 상향, 종료 없음
-        ringJobs += scope.launch {
-            while (isActive) {
-                delay(VolumeRamp.INTERVAL_MS)
-                sound?.setVolume(VolumeRamp.fractionAt(System.currentTimeMillis() - ringStartedAt))
-            }
         }
 
         // N분 미해제 → 스위치 점등

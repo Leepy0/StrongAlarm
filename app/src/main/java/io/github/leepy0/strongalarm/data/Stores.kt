@@ -38,6 +38,8 @@ data class AppSettings(
     val overrides: Map<String, String> = emptyMap(),
     val rule: DayOffRule = DayOffRule(),
     val stepGoal: Int = 30,
+    /** 알람 크기 % (10~100). 처음부터 이 크기로 고정 */
+    val alarmVolume: Int = 100,
     val nightlyHour: Int = 23,
     val nightlyMinute: Int = 0,
     val lights: LightSettings = LightSettings(),
