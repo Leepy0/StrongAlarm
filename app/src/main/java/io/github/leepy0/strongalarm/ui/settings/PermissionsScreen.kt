@@ -65,7 +65,8 @@ private fun PermissionGroup(items: List<PermissionItem>, onGrant: (PermissionKey
                 subtitle = item.why,
                 leading = if (item.granted) R.drawable.ic_check else R.drawable.ic_alert,
                 leadingTint = when {
-                    item.granted -> Palette.SunText
+                    // 허용됨은 평상시 상태라 중립색, 문제만 경고색
+                    item.granted -> Palette.Mist
                     item.optional -> Palette.Mist
                     else -> Palette.Ember
                 },

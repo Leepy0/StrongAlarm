@@ -27,6 +27,7 @@ import io.github.leepy0.strongalarm.ui.home.Readiness
 import io.github.leepy0.strongalarm.ui.rules.RulesScreen
 import io.github.leepy0.strongalarm.ui.rules.RulesUiState
 import io.github.leepy0.strongalarm.ui.settings.HistoryScreen
+import io.github.leepy0.strongalarm.ui.settings.LightTestState
 import io.github.leepy0.strongalarm.ui.settings.LightsScreen
 import io.github.leepy0.strongalarm.ui.settings.LightsUiState
 import io.github.leepy0.strongalarm.ui.settings.PermissionItem
@@ -81,6 +82,7 @@ class ScreenshotTest {
 
     // ── 가짜 데이터 ──
     private val today = LocalDate.of(2026, 10, 7)
+    private val NOW = 1_791_000_000_000L
     private val seven = LocalTime.of(7, 0)
 
     private fun day(offset: Long, ring: Boolean, label: String, reason: String, overridden: Boolean = false, time: LocalTime = seven) =
@@ -116,8 +118,15 @@ class ScreenshotTest {
             lightsLinked = 3,
             holidayCalendarSet = true,
             calendarReadable = true,
+            lastCheck = NOW - 12 * 60_000,
+            lastResult = "30걸음 걸어서 끔",
+            lastResultAt = NOW - 26 * 3_600_000,
         ),
+        nowMillis = NOW,
     )
+
+    @Composable
+    private fun Home(state: HomeUiState) = HomeScreen(state, {}, {}, {}, {}, {}, {})
 
     private val permissions = listOf(
         PermissionItem(PermissionKey.NOTIFICATIONS, "알림", "알람 화면과 23시 안내를 띄워요", true),
@@ -132,14 +141,14 @@ class ScreenshotTest {
     private val lights = LightsUiState(
         clientId = "a1b2c3", redirectUri = "https://httpbin.org/get", hasSecret = true, loggedIn = true,
         dimmers = listOf("침실 조명", "거실 조명"), switches = listOf("침실 스위치"),
-        leadMinutes = 15, switchDelayMinutes = 5, autoOffMinutes = 5, busy = false,
+        leadMinutes = 15, switchDelayMinutes = 5, autoOffMinutes = 5,
     )
 
     // ── 화면 ──
-    @Test fun home() = shot("01_home") { HomeScreen(home, {}, {}, {}, {}, {}) }
+    @Test fun home() = shot("01_home") { Home(home) }
 
     @Test fun homeRinging() = shot("02_home_ringing") {
-        HomeScreen(home.copy(ringing = true, readiness = home.readiness.copy(missingPermissions = 0, watchNodes = 0, lightsLinked = null, holidayCalendarSet = false)), {}, {}, {}, {}, {})
+        Home(home.copy(ringing = true, readiness = home.readiness.copy(missingPermissions = 0, watchNodes = 0, lightsLinked = null, holidayCalendarSet = false)))
     }
 
     @Test fun daySheetSkip() = shot("03_day_sheet_skip") {
@@ -166,10 +175,10 @@ class ScreenshotTest {
         SettingsScreen(SettingsUiState(stepGoal = 30, lightsSummary = "3개", missingPermissions = 1), {}, {}, {}, {}, {})
     }
 
-    @Test fun lightsConnected() = shot("07_lights") { LightsScreen(lights, {}, { _, _, _ -> }, {}, {}, {}, {}, {}) }
+    @Test fun lightsConnected() = shot("07_lights") { LightsScreen(lights, {}, { _, _, _ -> }, {}, {}, {}, {}, {}, {}) }
 
     @Test fun lightsSetup() = shot("08_lights_setup") {
-        LightsScreen(lights.copy(loggedIn = false, hasSecret = false, dimmers = emptyList(), switches = emptyList()), {}, { _, _, _ -> }, {}, {}, {}, {}, {})
+        LightsScreen(lights.copy(loggedIn = false, hasSecret = false, dimmers = emptyList(), switches = emptyList()), {}, { _, _, _ -> }, {}, {}, {}, {}, {}, {})
     }
 
     @Test fun permissionsScreen() = shot("09_permissions") { PermissionsScreen(permissions, {}, {}) }
@@ -183,7 +192,25 @@ class ScreenshotTest {
                 "10-07 07:02:41 | 기상 확인 — 걸음 30/30",
                 "10-07 07:07:42 | 자동 소등 (3/3)",
             ),
-            {},
+            {}, {},
+        )
+    }
+
+    @Test fun historyEmpty() = shot("15_history_empty") { HistoryScreen(emptyList(), {}, {}) }
+
+    @Test fun lightsTesting() = shot("14_lights_testing") {
+        LightsScreen(lights.copy(test = LightTestState(0.5f)), {}, { _, _, _ -> }, {}, {}, {}, {}, {}, {})
+    }
+
+    @Test fun homeProblems() = shot("16_home_problems") {
+        Home(
+            home.copy(
+                readiness = home.readiness.copy(
+                    missingPermissions = 0,
+                    lastCheckCalendarOk = false,
+                    lightsAuthError = true,
+                ),
+            ),
         )
     }
 
@@ -196,7 +223,7 @@ class ScreenshotTest {
     }
 
     // ── 밝은 모드 ──
-    @Test fun homeLight() = shot("21_home_light", dark = false) { HomeScreen(home, {}, {}, {}, {}, {}) }
+    @Test fun homeLight() = shot("21_home_light", dark = false) { Home(home) }
 
     @Test fun rulesLight() = shot("22_rules_light", dark = false) {
         RulesScreen(
@@ -213,8 +240,8 @@ class ScreenshotTest {
         Box(Modifier.background(Palette.Dusk).padding(top = 24.dp)) { DaySheetContent(days[8], seven, {}, {}, {}) }
     }
 
-    @Test fun homeLoading() = shot("25_home_loading") { HomeScreen(home.copy(days = emptyList(), next = null), {}, {}, {}, {}, {}) }
+    @Test fun homeLoading() = shot("25_home_loading") { Home(home.copy(days = emptyList(), next = null)) }
 
     @Config(qualifiers = "w720dp-h800dp-xxhdpi")
-    @Test fun homeWide() = shot("13_home_wide") { HomeScreen(home, {}, {}, {}, {}, {}) }
+    @Test fun homeWide() = shot("13_home_wide") { Home(home) }
 }

@@ -1,5 +1,8 @@
 package io.github.leepy0.strongalarm.ui.settings
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,7 +16,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -38,6 +40,10 @@ import io.github.leepy0.strongalarm.ui.components.RowItem
 import io.github.leepy0.strongalarm.ui.components.SectionLabel
 import io.github.leepy0.strongalarm.ui.components.Subpage
 import io.github.leepy0.strongalarm.ui.theme.Palette
+import kotlin.math.ceil
+
+/** 조명 테스트 진행 상태. progress 0~1, restoring = 원래 밝기로 되돌리는 중 */
+data class LightTestState(val progress: Float, val restoring: Boolean = false)
 
 data class LightsUiState(
     val clientId: String,
@@ -49,8 +55,8 @@ data class LightsUiState(
     val leadMinutes: Int,
     val switchDelayMinutes: Int,
     val autoOffMinutes: Int,
-    /** 조명 테스트 중 */
-    val busy: Boolean,
+    /** null = 테스트 안 함 */
+    val test: LightTestState? = null,
     /** 기기 목록 불러오는 중 */
     val loadingDevices: Boolean = false,
 )
@@ -65,6 +71,7 @@ fun LightsScreen(
     onPickDimmers: () -> Unit,
     onPickSwitches: () -> Unit,
     onTest: () -> Unit,
+    onCancelTest: () -> Unit,
 ) {
     var editing by remember(state.loggedIn) { mutableStateOf(!state.loggedIn) }
 
@@ -100,17 +107,16 @@ fun LightsScreen(
                         onClick = onPickSwitches,
                     )
                 }
-                OutlinedButton(
-                    onClick = onTest,
-                    enabled = !state.busy && state.dimmers.isNotEmpty(),
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                ) {
-                    if (state.busy) {
-                        CircularProgressIndicator(Modifier.size(16.dp), color = Palette.Mist, strokeWidth = 2.dp)
-                        Text("테스트 중, 곧 원래대로 돌아가요", color = Palette.Mist, modifier = Modifier.padding(start = 8.dp))
-                    } else {
-                        Text("디밍 조명 테스트", color = Palette.Ink)
-                    }
+                val test = state.test
+                if (test == null) {
+                    OutlinedButton(
+                        onClick = onTest,
+                        enabled = state.dimmers.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    ) { Text("디밍 조명 테스트", color = Palette.Ink) }
+                } else {
+                    // 약 10초 걸리므로 진행률 + 취소 (취소해도 원래 밝기로 돌려놓음)
+                    TestProgress(test, onCancelTest)
                 }
             }
         }
@@ -122,7 +128,7 @@ fun LightsScreen(
                     Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(if (state.loggedIn) Palette.SunText else Palette.Mist),
+                        .background(if (state.loggedIn) Palette.Ink else Palette.Faint),
                 )
                 Text(
                     if (state.loggedIn) "연결됨" else "연결 안 됨",
@@ -146,12 +152,50 @@ fun LightsScreen(
 }
 
 @Composable
+private fun TestProgress(test: LightTestState, onCancel: () -> Unit) {
+    // 단계 값이 1.6초마다 오므로 그 사이를 선형으로 채움
+    val shown by animateFloatAsState(test.progress, tween(1_600, easing = LinearEasing), label = "lightTest")
+    val secondsLeft = ceil((1f - shown) * 9.6f).toInt()
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(Palette.Dusk)
+            .padding(start = 16.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                when {
+                    test.restoring -> "원래 밝기로 돌리는 중"
+                    test.progress <= 5f / 6f -> "밝기 올리는 중 · ${secondsLeft}초 남음"
+                    else -> "최대 밝기 유지 · ${secondsLeft}초 남음"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = Palette.Ink,
+            )
+            LinearProgressIndicator(
+                progress = { if (test.restoring) 1f else shown },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                color = Palette.SunText,
+                trackColor = Palette.Line,
+            )
+        }
+        TextButton(onClick = onCancel, enabled = !test.restoring, modifier = Modifier.padding(start = 8.dp)) {
+            Text("취소", color = Palette.Ink)
+        }
+    }
+}
+
+@Composable
 private fun FlowStep(order: Int, title: String, body: String) {
     Row(Modifier.fillMaxWidth().padding(16.dp)) {
+        // 순서 번호는 의미 색이 아니라 중립색
         Text(
             "$order",
             style = MaterialTheme.typography.labelLarge,
-            color = Palette.SunText,
+            color = Palette.Mist,
             modifier = Modifier.padding(end = 16.dp),
         )
         Column {
@@ -172,7 +216,8 @@ private fun CredentialsForm(
     var redirect by remember(state.redirectUri) { mutableStateOf(state.redirectUri) }
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = Palette.SunText,
-        unfocusedBorderColor = Palette.Line,
+        // 입력칸 경계는 배경 대비 3:1 이상
+        unfocusedBorderColor = Palette.Mist,
         focusedLabelColor = Palette.SunText,
         cursorColor = Palette.SunText,
     )

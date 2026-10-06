@@ -377,7 +377,9 @@ class AlarmService : Service() {
                     }
                 }
                 val suffix = if (test) " (테스트)" else ""
+                val result = if (byHoliday) "쉬는 날 버튼으로 끔" else "${steps}걸음 걸어서 끔"
                 HistoryLog.add(ctx, (if (byHoliday) "휴무 버튼으로 종료" else "기상 확인 — 걸음 $steps/$goal") + suffix)
+                Stores.state.update(ctx) { it.copy(lastResult = result + suffix, lastResultAt = System.currentTimeMillis()) }
                 AlarmScheduler.rescheduleAll(ctx)
             }
             finishIdle()

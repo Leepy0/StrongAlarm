@@ -124,7 +124,8 @@ private fun scheme(c: AppColors, dark: Boolean): ColorScheme {
         inverseSurface = c.ink,
         inverseOnSurface = c.bg,
         inversePrimary = c.sunText,
-        outline = c.line,
+        // 버튼·입력칸 테두리는 3:1 이상(mist), 구분선은 옅게(line)
+        outline = c.mist,
         outlineVariant = c.line,
         error = c.ember,
         onError = c.bg,

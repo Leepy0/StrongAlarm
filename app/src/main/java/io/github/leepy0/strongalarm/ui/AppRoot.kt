@@ -2,19 +2,23 @@
 
 package io.github.leepy0.strongalarm.ui
 
+import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -77,6 +81,7 @@ import io.github.leepy0.strongalarm.ui.home.Readiness
 import io.github.leepy0.strongalarm.ui.rules.RulesScreen
 import io.github.leepy0.strongalarm.ui.rules.RulesUiState
 import io.github.leepy0.strongalarm.ui.settings.HistoryScreen
+import io.github.leepy0.strongalarm.ui.settings.LightTestState
 import io.github.leepy0.strongalarm.ui.settings.LightsScreen
 import io.github.leepy0.strongalarm.ui.settings.LightsUiState
 import io.github.leepy0.strongalarm.ui.settings.PermissionKey
@@ -85,6 +90,8 @@ import io.github.leepy0.strongalarm.ui.settings.SettingsScreen
 import io.github.leepy0.strongalarm.ui.settings.SettingsUiState
 import io.github.leepy0.strongalarm.ui.theme.Palette
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -211,7 +218,8 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
     val linkedCount = (lights.dimmerIds + lights.switchIds).distinct().size
     var devices by remember { mutableStateOf<List<SmartThingsClient.Device>?>(null) }
     var loadingDevices by remember { mutableStateOf(false) }
-    var lightBusy by remember { mutableStateOf(false) }
+    var lightTestState by remember { mutableStateOf<LightTestState?>(null) }
+    var lightTestJob by remember { mutableStateOf<Job?>(null) }
 
     // ── 시트·다이얼로그 상태 ──
     var sheetDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -236,8 +244,57 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
         }
     }
 
-    fun setOverride(date: LocalDate, time: LocalTime) =
-        save { it.copy(overrides = it.overrides + (date.toString() to time.toString())) }
+    /** 되돌릴 것 없는 결과 알림 */
+    fun notify(message: String, action: String? = null, onAction: () -> Unit = {}) {
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            val r = snackbar.showSnackbar(
+                message,
+                actionLabel = action,
+                duration = if (action != null) SnackbarDuration.Long else SnackbarDuration.Short,
+            )
+            if (r == SnackbarResult.ActionPerformed) onAction()
+        }
+    }
+
+    fun setOverride(date: LocalDate, time: LocalTime) {
+        val key = date.toString()
+        val old = settings.overrides[key]
+        save { it.copy(overrides = it.overrides + (key to time.toString())) }
+        undoable("${date.pretty()} ${time.hhmm()}에 울려요") {
+            save { it.copy(overrides = if (old == null) it.overrides - key else it.overrides + (key to old)) }
+        }
+    }
+
+    fun setBaseTime(time: LocalTime) {
+        val old = settings.baseTime
+        if (old == time) return
+        save { it.copy(alarmHour = time.hour, alarmMinute = time.minute) }
+        undoable("이제 매일 ${time.hhmm()}에 울려요") { save { it.copy(alarmHour = old.hour, alarmMinute = old.minute) } }
+    }
+
+    /** 테스트 알람: 정확한 알람 권한이 없으면 울리지 않으므로 먼저 확인 */
+    fun testAlarm() {
+        if (!ctx.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()) {
+            notify("정확한 알람 권한이 없어 테스트할 수 없어요", "권한 설정") { sub = Sub.PERMISSIONS }
+            return
+        }
+        AlarmScheduler.scheduleTest(ctx, 10_000)
+        notify("10초 뒤 울려요. 화면을 꺼두고 기다려보세요.")
+    }
+
+    /** 조명 테스트: 진행률 표시, 취소해도 원래 밝기로 복구 */
+    fun startLightTest() {
+        if (lightTestJob != null) return
+        lightTestJob = scope.launch {
+            try {
+                lightTest(ctx, lights.dimmerIds, lights.dimTargetLevel) { lightTestState = it }
+            } finally {
+                lightTestState = null
+                lightTestJob = null
+            }
+        }
+    }
 
     fun clearOverride(date: LocalDate) {
         val old = settings.overrides[date.toString()]
@@ -340,7 +397,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                             leadMinutes = lights.dimLeadMinutes,
                             switchDelayMinutes = lights.switchDelayMinutes,
                             autoOffMinutes = lights.autoOffMinutes,
-                            busy = lightBusy,
+                            test = lightTestState,
                             loadingDevices = loadingDevices,
                         ),
                         onBack = { sub = null },
@@ -352,13 +409,8 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                         onLogout = { confirmLogout = true },
                         onPickDimmers = { pickDevices("dimmer") },
                         onPickSwitches = { pickDevices("switch") },
-                        onTest = {
-                            lightBusy = true
-                            scope.launch {
-                                lightTest(ctx, lights.dimmerIds, lights.dimTargetLevel)
-                                lightBusy = false
-                            }
-                        },
+                        onTest = ::startLightTest,
+                        onCancelTest = { lightTestJob?.cancel() },
                     )
 
                     Sub.PERMISSIONS -> PermissionsScreen(permissions, onBack = { sub = null }, onGrant = grant)
@@ -368,7 +420,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                         LaunchedEffect(appState, tick) {
                             lines = withContext(Dispatchers.IO) { HistoryLog.read(ctx).takeLast(120) }
                         }
-                        HistoryScreen(lines, onBack = { sub = null })
+                        HistoryScreen(lines, onBack = { sub = null }, onTestAlarm = ::testAlarm)
                     }
 
                     null -> when (tab) {
@@ -395,13 +447,20 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                                         lightsLinked = if (loggedIn) linkedCount else null,
                                         holidayCalendarSet = settings.rule.holidayCalendarIds.isNotEmpty(),
                                         calendarReadable = calendarReadable,
+                                        lastCheck = appState.lastCheck,
+                                        lastCheckCalendarOk = appState.lastCheckCalendarOk,
+                                        lastResult = appState.lastResult,
+                                        lastResultAt = appState.lastResultAt,
+                                        lightsAuthError = appState.lightsAuthError,
                                     ),
+                                    nowMillis = remember(tick, appState) { System.currentTimeMillis() },
                                 ),
                                 onDayClick = { sheetDate = it },
                                 onEditBaseTime = { timeTarget = TimeTarget.Base },
                                 onOpenAlarm = { ctx.startActivity(Intent(ctx, AlarmActivity::class.java)) },
                                 onOpenPermissions = { sub = Sub.PERMISSIONS },
                                 onOpenRules = { tab = Tab.RULES },
+                                onOpenLights = { sub = Sub.LIGHTS },
                             )
                         }
 
@@ -423,6 +482,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                                 stepGoal = settings.stepGoal,
                                 lightsSummary = when {
                                     !loggedIn -> null
+                                    appState.lightsAuthError -> "다시 로그인 필요"
                                     linkedCount == 0 -> "기기 선택 필요"
                                     else -> "${linkedCount}개"
                                 },
@@ -431,10 +491,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                             onStepGoal = { v -> save { it.copy(stepGoal = v) } },
                             onOpenLights = { sub = Sub.LIGHTS },
                             onOpenPermissions = { sub = Sub.PERMISSIONS },
-                            onTestAlarm = {
-                                AlarmScheduler.scheduleTest(ctx, 10_000)
-                                Toast.makeText(ctx, "10초 뒤 울려요. 화면을 꺼두고 기다려보세요.", Toast.LENGTH_LONG).show()
-                            },
+                            onTestAlarm = ::testAlarm,
                             onOpenHistory = { sub = Sub.HISTORY },
                         )
                     }
@@ -451,7 +508,12 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = Palette.Dusk,
         ) {
-            sheetCell?.let { cell ->
+            val cell = sheetCell?.takeIf { it.date == sheetDate }
+            if (cell == null) {
+                Box(Modifier.fillMaxWidth().height(240.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(24.dp), color = Palette.Mist, strokeWidth = 2.dp)
+                }
+            } else {
                 DaySheetContent(
                     day = cell,
                     baseTime = settings.baseTime,
@@ -476,7 +538,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
     when (val t = timeTarget) {
         TimeTarget.Base -> TimePickDialog("매일 울릴 시각", settings.baseTime, onDismiss = { timeTarget = null }) { time ->
             timeTarget = null
-            save { it.copy(alarmHour = time.hour, alarmMinute = time.minute) }
+            setBaseTime(time)
         }
         is TimeTarget.Day -> TimePickDialog(
             "${t.date.longKo()}만",
@@ -568,14 +630,30 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
     }
 }
 
-/** 스냅샷 → 약 8초 동안 1→목표 밝기 → 2초 유지 → 원래대로 (10초 이내라 스피너만 표시) */
-private suspend fun lightTest(ctx: Context, ids: List<String>, target: Int) = withContext(Dispatchers.IO) {
-    val snap = LightController.snapshot(ctx, ids)
-    val targets = ids.filter { snap[it]?.on != true }
-    for (i in 0..4) {
-        LightController.setLevels(ctx, targets, 1 + (target - 1) * i / 4, turnOn = true)
-        delay(1_600)
+private const val TEST_SEGMENT_MS = 1_600L
+
+/**
+ * 스냅샷 → 1.6초 간격 5단계로 1→목표 밝기 → 1.6초 유지 → 원래대로 (약 10초).
+ * 취소돼도 finally에서 원래 상태로 복구
+ */
+private suspend fun lightTest(ctx: Context, ids: List<String>, target: Int, onState: (LightTestState) -> Unit) {
+    onState(LightTestState(0f))
+    val snap = withContext(Dispatchers.IO) { LightController.snapshot(ctx, ids) }
+    try {
+        val targets = ids.filter { snap[it]?.on != true }
+        val segments = 6
+        for (i in 0 until segments) {
+            // 각 구간 시작 시 구간 끝 값을 넘기면 화면에서 1.6초 동안 부드럽게 채움
+            onState(LightTestState((i + 1f) / segments))
+            if (i < 5) {
+                withContext(Dispatchers.IO) { LightController.setLevels(ctx, targets, 1 + (target - 1) * i / 4, turnOn = true) }
+            }
+            delay(TEST_SEGMENT_MS)
+        }
+    } finally {
+        onState(LightTestState(1f, restoring = true))
+        withContext(NonCancellable + Dispatchers.IO) {
+            LightController.restore(ctx, SessionState("test", 0, Phase.DONE, snap, dimmersTouched = true), "조명 테스트 복구")
+        }
     }
-    delay(2_000)
-    LightController.restore(ctx, SessionState("test", 0, Phase.DONE, snap, dimmersTouched = true), "조명 테스트 복구")
 }

@@ -109,14 +109,14 @@ fun RulesScreen(
         }
         Step(2, "근무 일정", ring = true) {
             Hint("일정 제목에 이 단어가 있으면 주말·공휴일에도 울려요")
-            KeywordChips(rule.workKeywords, ChipTone.SUN) { onChange(rule.copy(workKeywords = it)) }
+            KeywordChips(rule.workKeywords, ChipTone.SUN, "근무 키워드 추가") { onChange(rule.copy(workKeywords = it)) }
         }
         Step(3, "휴무 일정", ring = false) {
             Hint("일정 제목에 이 단어가 있으면 쉬어요")
-            KeywordChips(rule.offKeywords, ChipTone.MOON) { onChange(rule.copy(offKeywords = it)) }
+            KeywordChips(rule.offKeywords, ChipTone.MOON, "휴무 키워드 추가") { onChange(rule.copy(offKeywords = it)) }
             Spacer(Modifier.height(16.dp))
             Hint("이 단어가 함께 있으면 휴무로 보지 않아요")
-            KeywordChips(rule.excludeKeywords, ChipTone.PLAIN) { onChange(rule.copy(excludeKeywords = it)) }
+            KeywordChips(rule.excludeKeywords, ChipTone.PLAIN, "제외 키워드 추가") { onChange(rule.copy(excludeKeywords = it)) }
         }
         Step(4, "공휴일", ring = false) {
             val names = rule.holidayCalendarIds.mapNotNull { state.calendarNames[it] }
@@ -139,7 +139,7 @@ fun RulesScreen(
             }
             Spacer(Modifier.height(12.dp))
             Hint("공휴일 캘린더에 있어도 무시할 기념일")
-            KeywordChips(rule.holidayExcludeKeywords, ChipTone.PLAIN) { onChange(rule.copy(holidayExcludeKeywords = it)) }
+            KeywordChips(rule.holidayExcludeKeywords, ChipTone.PLAIN, "무시할 기념일 추가") { onChange(rule.copy(holidayExcludeKeywords = it)) }
         }
         Step(5, "주말", ring = false, last = true) {
             Hint("토요일과 일요일. 어디에도 해당하지 않는 평일은 울려요.")

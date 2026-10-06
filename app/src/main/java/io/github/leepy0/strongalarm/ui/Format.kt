@@ -28,6 +28,17 @@ fun LocalDate.relativeKo(today: LocalDate): String = when (this) {
 /** 07:00 */
 fun LocalTime.hhmm(): String = "%02d:%02d".format(hour, minute)
 
+/** 방금 · 5분 전 · 3시간 전 · 2일 전 */
+fun agoKo(atMillis: Long, nowMillis: Long): String {
+    val min = ((nowMillis - atMillis) / 60_000).coerceAtLeast(0)
+    return when {
+        min < 1 -> "방금"
+        min < 60 -> "${min}분 전"
+        min < 24 * 60 -> "${min / 60}시간 전"
+        else -> "${min / (24 * 60)}일 전"
+    }
+}
+
 /** 판정 사유를 사용자 문장으로 */
 fun Judgement.sentence(): String = when (code) {
     ReasonCode.OVERRIDE -> "이 날만 시각을 바꿔뒀어요"

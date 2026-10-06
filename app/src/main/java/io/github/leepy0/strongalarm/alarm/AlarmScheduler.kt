@@ -101,6 +101,9 @@ object AlarmScheduler {
             Stores.state.update(ctx) { it.copy(next = null) }
         }
 
+        Stores.state.update(ctx) {
+            it.copy(lastCheck = System.currentTimeMillis(), lastCheckCalendarOk = input.events != null)
+        }
         scheduleNightly(ctx)
         CalendarChangeJob.schedule(ctx)
     }

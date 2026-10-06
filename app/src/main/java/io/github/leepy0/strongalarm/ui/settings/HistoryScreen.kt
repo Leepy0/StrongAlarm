@@ -6,9 +6,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.leepy0.strongalarm.ui.components.Group
 import io.github.leepy0.strongalarm.ui.components.GroupDivider
@@ -18,10 +21,23 @@ import io.github.leepy0.strongalarm.ui.theme.Palette
 
 /** "MM-dd HH:mm:ss | 메시지" 줄을 날짜별로 묶어 최신순 표시 */
 @Composable
-fun HistoryScreen(lines: List<String>, onBack: () -> Unit) {
+fun HistoryScreen(lines: List<String>, onBack: () -> Unit, onTestAlarm: () -> Unit) {
     Subpage("기록", onBack) {
         if (lines.isEmpty()) {
-            Text("아직 기록이 없어요. 테스트 알람을 울려보면 여기에 남아요.", style = MaterialTheme.typography.bodyMedium, color = Palette.Mist)
+            // 빈 상태: 이유 + 바로 할 수 있는 행동
+            Column(Modifier.fillMaxWidth().padding(top = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("아직 기록이 없어요", style = MaterialTheme.typography.titleLarge, color = Palette.Ink)
+                Text(
+                    "알람이 울리고 꺼진 과정, 조명 제어 결과가 여기에 남아요.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Palette.Mist,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                OutlinedButton(onClick = onTestAlarm, modifier = Modifier.padding(top = 24.dp)) {
+                    Text("10초 뒤 테스트 알람", color = Palette.Ink)
+                }
+            }
         }
         val entries = lines.reversed().map { line ->
             val stamp = line.substringBefore(" | ", "")

@@ -49,7 +49,10 @@ object SmartThingsAuth {
 
     fun saveClientSecret(ctx: Context, secret: String) = save(ctx, load(ctx).copy(clientSecret = secret.trim()))
 
-    fun logout(ctx: Context) = save(ctx, load(ctx).copy(accessToken = "", refreshToken = "", expiresAt = 0))
+    fun logout(ctx: Context) {
+        save(ctx, load(ctx).copy(accessToken = "", refreshToken = "", expiresAt = 0))
+        Stores.state.update(ctx) { it.copy(lightsAuthError = false) }
+    }
 
     fun authorizeUrl(clientId: String, redirectUri: String): String =
         "$AUTHORIZE?client_id=${enc(clientId)}&response_type=code" +
@@ -99,6 +102,8 @@ object SmartThingsAuth {
         )
         if (!res.ok) {
             Log.e(TAG, "토큰 요청 실패 ${res.code}: ${res.body}")
+            // 4xx = 토큰·자격 거부(재로그인 필요). 네트워크 오류(-1)·5xx는 일시적이라 표시하지 않음
+            if (res.code in 400..499) Stores.state.update(ctx) { it.copy(lightsAuthError = true) }
             return false
         }
         return runCatching {
@@ -112,6 +117,7 @@ object SmartThingsAuth {
                     expiresAt = System.currentTimeMillis() + o.optLong("expires_in", 86_400) * 1000,
                 ),
             )
+            Stores.state.update(ctx) { it.copy(lightsAuthError = false) }
             true
         }.getOrElse {
             Log.e(TAG, "토큰 응답 파싱 실패", it)

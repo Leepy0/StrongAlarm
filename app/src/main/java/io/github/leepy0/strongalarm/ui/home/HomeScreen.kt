@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import io.github.leepy0.strongalarm.ui.agoKo
 import io.github.leepy0.strongalarm.ui.components.ScreenPadding
 import io.github.leepy0.strongalarm.ui.components.SectionLabel
 import io.github.leepy0.strongalarm.ui.components.StatusLine
@@ -67,6 +68,15 @@ data class Readiness(
     val lightsLinked: Int?,
     val holidayCalendarSet: Boolean,
     val calendarReadable: Boolean,
+    /** 마지막으로 일정을 확인한 시각 (null = 아직 없음) */
+    val lastCheck: Long? = null,
+    /** 마지막 확인 때 캘린더를 읽었는지 */
+    val lastCheckCalendarOk: Boolean = true,
+    /** 지난 알람 결과 문장과 시각 */
+    val lastResult: String? = null,
+    val lastResultAt: Long? = null,
+    /** SmartThings 재로그인 필요 */
+    val lightsAuthError: Boolean = false,
 )
 
 data class HomeUiState(
@@ -78,6 +88,8 @@ data class HomeUiState(
     val ringing: Boolean,
     val dimming: Boolean,
     val readiness: Readiness,
+    /** 'n분 전' 계산 기준 (테스트에서 고정) */
+    val nowMillis: Long = System.currentTimeMillis(),
 )
 
 /** 오늘·내일·모레 또는 10/9(금) */
@@ -99,6 +111,7 @@ fun HomeScreen(
     onOpenAlarm: () -> Unit,
     onOpenPermissions: () -> Unit,
     onOpenRules: () -> Unit,
+    onOpenLights: () -> Unit,
 ) {
     Column(
         Modifier
@@ -135,7 +148,7 @@ fun HomeScreen(
 
         Spacer(Modifier.height(32.dp))
         SectionLabel("준비 상태")
-        ReadinessList(state.readiness, onOpenPermissions, onOpenRules)
+        ReadinessList(state.readiness, state.nowMillis, onOpenPermissions, onOpenRules, onOpenLights)
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -298,8 +311,25 @@ private fun LegendText(text: String) {
 }
 
 @Composable
-private fun ReadinessList(r: Readiness, onOpenPermissions: () -> Unit, onOpenRules: () -> Unit) {
+private fun ReadinessList(
+    r: Readiness,
+    now: Long,
+    onOpenPermissions: () -> Unit,
+    onOpenRules: () -> Unit,
+    onOpenLights: () -> Unit,
+) {
     Column {
+        // 시스템 상태 가시성: 앱이 실제로 일정을 확인했는지, 지난 알람이 어떻게 끝났는지
+        r.lastCheck?.let { at ->
+            if (r.lastCheckCalendarOk) {
+                StatusLine(true, "일정 확인: ${agoKo(at, now)}")
+            } else {
+                StatusLine(false, "${agoKo(at, now)} 일정 확인 때 캘린더를 못 읽었어요", "확인", onOpenPermissions)
+            }
+        }
+        if (r.lastResult != null && r.lastResultAt != null) {
+            StatusLine(true, "지난 알람: ${r.lastResult} (${agoKo(r.lastResultAt, now)})")
+        }
         if (r.missingPermissions > 0) {
             StatusLine(false, "권한 ${r.missingPermissions}개가 필요해요", "설정", onOpenPermissions)
         } else {
@@ -315,9 +345,11 @@ private fun ReadinessList(r: Readiness, onOpenPermissions: () -> Unit, onOpenRul
             0 -> StatusLine(null, "워치 연결 안 됨, 폰 걸음만 세요")
             else -> StatusLine(true, "워치 연결됨")
         }
-        when (r.lightsLinked) {
-            null -> StatusLine(null, "조명 연동 안 함")
-            0 -> StatusLine(null, "조명 계정 연결됨, 기기를 골라주세요")
+        when {
+            r.lightsAuthError && r.lightsLinked != null ->
+                StatusLine(false, "조명 로그인이 만료됐어요", "다시 로그인", onOpenLights)
+            r.lightsLinked == null -> StatusLine(null, "조명 연동 안 함")
+            r.lightsLinked == 0 -> StatusLine(null, "조명 계정 연결됨, 기기를 골라주세요", "선택", onOpenLights)
             else -> StatusLine(true, "조명 ${r.lightsLinked}개 연결됨")
         }
     }

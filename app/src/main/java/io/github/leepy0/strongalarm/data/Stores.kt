@@ -80,6 +80,15 @@ data class AppState(
     val cache: Map<String, CachedEntry> = emptyMap(),
     val next: NextPlan? = null,
     val session: SessionState? = null,
+    /** 마지막으로 알람 일정을 다시 계산한 시각 */
+    val lastCheck: Long? = null,
+    /** 마지막 계산 때 캘린더를 읽었는지 */
+    val lastCheckCalendarOk: Boolean = true,
+    /** 지난 알람 결과 (예: "07:03 걸어서 끔") */
+    val lastResult: String? = null,
+    val lastResultAt: Long? = null,
+    /** SmartThings 토큰 갱신이 거부됨 → 재로그인 필요 */
+    val lightsAuthError: Boolean = false,
 )
 
 object Stores {
