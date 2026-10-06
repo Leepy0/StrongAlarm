@@ -48,13 +48,13 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState())
             .statusBarsPadding()
             .padding(horizontal = ScreenPadding),
-        verticalArrangement = Arrangement.spacedBy(28.dp),
+        verticalArrangement = Arrangement.spacedBy(32.dp),
     ) {
         Text(
             "설정",
             style = MaterialTheme.typography.headlineSmall,
             color = Palette.Ink,
-            modifier = Modifier.padding(top = 28.dp),
+            modifier = Modifier.padding(top = 32.dp),
         )
 
         Column {
@@ -62,7 +62,7 @@ fun SettingsScreen(
             Group {
                 RowItem(
                     title = "걸음 수",
-                    subtitle = "워치나 폰으로 이만큼 걸어야 꺼져요",
+                    subtitle = "이만큼 걸어야 꺼져요",
                     trailing = { Stepper(state.stepGoal, onStepGoal) },
                 )
                 GroupDivider()
@@ -111,17 +111,17 @@ fun SettingsScreen(
 private fun Stepper(value: Int, onChange: (Int) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { onChange((value - 5).coerceAtLeast(10)) }) {
-            AppIcon(R.drawable.ic_minus, Palette.Ink, size = 18)
+            AppIcon(R.drawable.ic_minus, Palette.Ink, size = 20)
         }
         Text(
             "$value",
             style = MaterialTheme.typography.titleMedium,
             color = Palette.Ink,
             textAlign = TextAlign.Center,
-            modifier = Modifier.width(36.dp),
+            modifier = Modifier.width(40.dp),
         )
         IconButton(onClick = { onChange((value + 5).coerceAtMost(200)) }) {
-            AppIcon(R.drawable.ic_plus, Palette.Ink, size = 18)
+            AppIcon(R.drawable.ic_plus, Palette.Ink, size = 20)
         }
     }
 }

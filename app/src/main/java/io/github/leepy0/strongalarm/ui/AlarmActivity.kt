@@ -40,7 +40,8 @@ class AlarmActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = Unit
         })
-        setContent { AppTheme { AlarmRoute(onFinish = { finish() }) } }
+        // 어두운 방에서 보는 화면이라 항상 다크
+        setContent { AppTheme(dark = true) { AlarmRoute(onFinish = { finish() }) } }
     }
 }
 

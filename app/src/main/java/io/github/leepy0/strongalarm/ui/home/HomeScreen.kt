@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,18 +19,18 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.leepy0.strongalarm.ui.components.ScreenPadding
@@ -37,13 +38,13 @@ import io.github.leepy0.strongalarm.ui.components.SectionLabel
 import io.github.leepy0.strongalarm.ui.components.StatusLine
 import io.github.leepy0.strongalarm.ui.hhmm
 import io.github.leepy0.strongalarm.ui.longKo
-import io.github.leepy0.strongalarm.ui.relativeKo
+import io.github.leepy0.strongalarm.ui.pretty
 import io.github.leepy0.strongalarm.ui.theme.Palette
 import io.github.leepy0.strongalarm.ui.weekdayShort
 import java.time.LocalDate
 import java.time.LocalTime
 
-/** 2주 스트립의 하루 */
+/** 2주 격자의 하루 */
 data class DayCell(
     val date: LocalDate,
     val ring: Boolean,
@@ -72,12 +73,24 @@ data class HomeUiState(
     val today: LocalDate,
     val next: NextAlarm?,
     val baseTime: LocalTime,
+    /** 비어 있으면 판정 중(로딩) */
     val days: List<DayCell>,
     val ringing: Boolean,
     val dimming: Boolean,
     val readiness: Readiness,
 )
 
+/** 오늘·내일·모레 또는 10/9(금) */
+private fun LocalDate.shortRelative(today: LocalDate): String = when (this) {
+    today -> "오늘"
+    today.plusDays(1) -> "내일"
+    today.plusDays(2) -> "모레"
+    else -> pretty()
+}
+
+/**
+ * 알람 탭. 항상 보여야 할 상태 = 다음 알람, 주요 행동 = 그날만 바꾸기(엄지 영역 쪽에 배치)
+ */
 @Composable
 fun HomeScreen(
     state: HomeUiState,
@@ -94,18 +107,33 @@ fun HomeScreen(
             .statusBarsPadding()
             .padding(horizontal = ScreenPadding),
     ) {
-        if (state.ringing) {
-            RingingBanner(onOpenAlarm)
+        if (state.ringing) RingingBanner(onOpenAlarm)
+
+        Hero(state, onOpenRules)
+
+        Spacer(Modifier.height(32.dp))
+        SectionLabel("앞으로 2주")
+        if (state.days.isEmpty()) {
+            Loading()
+        } else {
+            TwoWeeks(state.days, state.today, onDayClick)
+            Legend()
         }
 
-        Hero(state, onDayClick, onEditBaseTime)
+        Spacer(Modifier.height(24.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            state.next?.let { next ->
+                Button(
+                    onClick = { onDayClick(next.date) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Palette.Sun, contentColor = Palette.SunInk),
+                ) { Text("${next.date.shortRelative(state.today)}만 바꾸기") }
+            }
+            OutlinedButton(onClick = onEditBaseTime) {
+                Text("매일 ${state.baseTime.hhmm()}", color = Palette.Ink)
+            }
+        }
 
-        Spacer(Modifier.height(40.dp))
-        SectionLabel("앞으로 2주")
-        TwoWeeks(state.days, state.today, onDayClick)
-        Legend()
-
-        Spacer(Modifier.height(36.dp))
+        Spacer(Modifier.height(32.dp))
         SectionLabel("준비 상태")
         ReadinessList(state.readiness, onOpenPermissions, onOpenRules)
         Spacer(Modifier.height(24.dp))
@@ -118,35 +146,39 @@ private fun RingingBanner(onOpen: () -> Unit) {
         Modifier
             .padding(top = 12.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(MaterialTheme.shapes.medium)
             .background(Palette.SunSoft)
             .clickable(onClick = onOpen)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("알람이 울리고 있어요", style = MaterialTheme.typography.bodyLarge, color = Palette.Sun, modifier = Modifier.weight(1f))
-        Text("열기", style = MaterialTheme.typography.labelLarge, color = Palette.Sun)
+        Text("알람이 울리고 있어요", style = MaterialTheme.typography.bodyLarge, color = Palette.SunText, modifier = Modifier.weight(1f))
+        Text("열기", style = MaterialTheme.typography.labelLarge, color = Palette.SunText)
     }
 }
 
 @Composable
-private fun Hero(state: HomeUiState, onDayClick: (LocalDate) -> Unit, onEditBaseTime: () -> Unit) {
+private fun Hero(state: HomeUiState, onOpenRules: () -> Unit) {
     val next = state.next
-    Column(Modifier.padding(top = 36.dp)) {
+    Column(Modifier.padding(top = 32.dp)) {
         if (next == null) {
-            Text("다음 알람", style = MaterialTheme.typography.titleMedium, color = Palette.Mist)
+            Text("다음 알람", style = MaterialTheme.typography.labelLarge, color = Palette.Mist)
             Spacer(Modifier.height(8.dp))
             Text("예정된 알람이 없어요", style = MaterialTheme.typography.headlineSmall, color = Palette.Ink)
             Text(
-                "앞으로 두 달 동안 모두 쉬는 날로 판단했어요. 휴무 규칙을 확인해보세요.",
+                "앞으로 두 달 동안 모두 쉬는 날로 판단했어요.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Palette.Mist,
-                modifier = Modifier.padding(top = 6.dp),
+                modifier = Modifier.padding(top = 4.dp),
             )
+            TextButton(onClick = onOpenRules, modifier = Modifier.offset(x = (-12).dp)) {
+                Text("휴무 규칙 보기", color = Palette.SunText)
+            }
         } else {
             Text(
-                "${next.date.relativeKo(state.today)} 아침",
-                style = MaterialTheme.typography.titleMedium,
+                "${next.date.shortRelative(state.today)} 아침",
+                style = MaterialTheme.typography.labelLarge,
                 color = Palette.Mist,
             )
             Text(
@@ -155,46 +187,40 @@ private fun Hero(state: HomeUiState, onDayClick: (LocalDate) -> Unit, onEditBase
                 color = Palette.Ink,
                 modifier = Modifier.offset(x = (-4).dp),
             )
-            Text(
-                "${next.date.longKo()}, ${next.reason}",
-                style = MaterialTheme.typography.bodyLarge,
-                color = Palette.Ink,
-            )
+            Text("${next.date.longKo()}, ${next.reason}", style = MaterialTheme.typography.bodyLarge, color = Palette.Ink)
             if (state.dimming) {
                 Text(
                     "조명을 서서히 켜는 중",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Palette.Sun,
+                    color = Palette.SunText,
                     modifier = Modifier.padding(top = 4.dp),
                 )
-            }
-        }
-
-        Spacer(Modifier.height(20.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (next != null) {
-                Button(
-                    onClick = { onDayClick(next.date) },
-                    colors = ButtonDefaults.buttonColors(containerColor = Palette.Sun, contentColor = Palette.SunInk),
-                ) { Text("이 날만 바꾸기") }
-            }
-            OutlinedButton(onClick = onEditBaseTime) {
-                Text("매일 ${state.baseTime.hhmm()}", color = Palette.Ink)
             }
         }
     }
 }
 
-/** 해(울림) · 달(쉼) 2주 격자 */
+@Composable
+private fun Loading() {
+    Row(
+        Modifier.fillMaxWidth().height(176.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CircularProgressIndicator(Modifier.size(24.dp), color = Palette.Mist, strokeWidth = 2.dp)
+        Text("캘린더 확인 중", style = MaterialTheme.typography.bodyMedium, color = Palette.Mist, modifier = Modifier.padding(start = 12.dp))
+    }
+}
+
+/** 해(울림)·달(쉼) 2주 격자. 모양(채움/테두리)과 글자로도 구분 */
 @Composable
 private fun TwoWeeks(days: List<DayCell>, today: LocalDate, onDayClick: (LocalDate) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         days.chunked(7).forEach { week ->
             Row(Modifier.fillMaxWidth()) {
                 week.forEach { d ->
                     DayDisc(d, isToday = d.date == today, modifier = Modifier.weight(1f), onClick = { onDayClick(d.date) })
                 }
-                // 마지막 주가 7일 미만이면 빈 칸 채움
                 repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
             }
         }
@@ -205,7 +231,7 @@ private fun TwoWeeks(days: List<DayCell>, today: LocalDate, onDayClick: (LocalDa
 private fun DayDisc(d: DayCell, isToday: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Column(
         modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(MaterialTheme.shapes.small)
             .clickable(onClick = onClick)
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -214,30 +240,27 @@ private fun DayDisc(d: DayCell, isToday: Boolean, modifier: Modifier, onClick: (
             if (isToday) "오늘" else d.date.weekdayShort(),
             style = MaterialTheme.typography.labelSmall,
             color = if (isToday) Palette.Ink else Palette.Mist,
-            fontWeight = if (isToday) FontWeight.Bold else null,
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
         Box(contentAlignment = Alignment.Center) {
-            val discModifier = Modifier.size(38.dp).clip(CircleShape)
+            val disc = Modifier.size(40.dp).clip(CircleShape)
             if (d.ring) {
-                Box(discModifier.background(Palette.Sun), contentAlignment = Alignment.Center) {
+                // 밝은 모드에서도 경계가 보이도록 진한 테두리 (다크에선 같은 색)
+                Box(disc.background(Palette.Sun).border(2.dp, Palette.SunText, CircleShape), contentAlignment = Alignment.Center) {
                     Text("${d.date.dayOfMonth}", style = MaterialTheme.typography.labelLarge, color = Palette.SunInk)
                 }
             } else {
-                Box(
-                    discModifier.border(1.5.dp, Palette.Moon.copy(alpha = 0.55f), CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
+                Box(disc.border(2.dp, Palette.Moon, CircleShape), contentAlignment = Alignment.Center) {
                     Text("${d.date.dayOfMonth}", style = MaterialTheme.typography.labelLarge, color = Palette.Moon)
                 }
             }
             if (d.overridden) {
-                // 시각을 바꾼 날 표시
+                // 시각을 바꾼 날: 오른쪽 위 점
                 Box(
                     Modifier
                         .align(Alignment.TopEnd)
-                        .offset(x = 3.dp, y = (-1).dp)
-                        .size(10.dp)
+                        .offset(x = 4.dp, y = (-4).dp)
+                        .size(12.dp)
                         .clip(CircleShape)
                         .background(Palette.Night)
                         .padding(2.dp)
@@ -246,7 +269,7 @@ private fun DayDisc(d: DayCell, isToday: Boolean, modifier: Modifier, onClick: (
                 )
             }
         }
-        Spacer(Modifier.height(5.dp))
+        Spacer(Modifier.height(4.dp))
         Text(
             d.label,
             style = MaterialTheme.typography.labelSmall,
@@ -259,15 +282,19 @@ private fun DayDisc(d: DayCell, isToday: Boolean, modifier: Modifier, onClick: (
 
 @Composable
 private fun Legend() {
-    Row(Modifier.padding(top = 14.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(10.dp).clip(CircleShape).background(Palette.Sun))
-        Text("울림", style = MaterialTheme.typography.labelSmall, color = Palette.Mist, modifier = Modifier.padding(start = 6.dp, end = 16.dp))
-        Box(Modifier.size(10.dp).border(1.5.dp, Palette.Moon, CircleShape))
-        Text("쉼", style = MaterialTheme.typography.labelSmall, color = Palette.Mist, modifier = Modifier.padding(start = 6.dp, end = 16.dp))
+    Row(Modifier.padding(top = 12.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(12.dp).clip(CircleShape).background(Palette.Sun).border(2.dp, Palette.SunText, CircleShape))
+        LegendText("울림")
+        Box(Modifier.size(12.dp).border(2.dp, Palette.Moon, CircleShape))
+        LegendText("쉼")
         Box(Modifier.size(8.dp).clip(CircleShape).background(Palette.Ink))
-        Text("시각 바꾼 날", style = MaterialTheme.typography.labelSmall, color = Palette.Mist, modifier = Modifier.padding(start = 6.dp))
-        Spacer(Modifier.width(1.dp))
+        LegendText("시각 바꾼 날")
     }
+}
+
+@Composable
+private fun LegendText(text: String) {
+    Text(text, style = MaterialTheme.typography.labelSmall, color = Palette.Mist, modifier = Modifier.padding(start = 8.dp, end = 16.dp))
 }
 
 @Composable

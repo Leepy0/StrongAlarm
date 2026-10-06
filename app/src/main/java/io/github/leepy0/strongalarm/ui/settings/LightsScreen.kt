@@ -2,16 +2,19 @@ package io.github.leepy0.strongalarm.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -46,7 +49,10 @@ data class LightsUiState(
     val leadMinutes: Int,
     val switchDelayMinutes: Int,
     val autoOffMinutes: Int,
+    /** 조명 테스트 중 */
     val busy: Boolean,
+    /** 기기 목록 불러오는 중 */
+    val loadingDevices: Boolean = false,
 )
 
 @Composable
@@ -63,7 +69,7 @@ fun LightsScreen(
     var editing by remember(state.loggedIn) { mutableStateOf(!state.loggedIn) }
 
     Subpage("조명", onBack) {
-        // 알람과 조명이 어떻게 맞물리는지: 실제 순서라 번호를 붙임
+        // 실제 시간 순서라 번호를 붙임
         Column {
             SectionLabel("알람 날 조명 흐름")
             Group {
@@ -79,6 +85,9 @@ fun LightsScreen(
             Column {
                 SectionLabel("기기")
                 Group {
+                    if (state.loadingDevices) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth(), color = Palette.SunText, trackColor = Palette.Line)
+                    }
                     RowItem(
                         title = "디밍 조명",
                         subtitle = state.dimmers.joinToString(", ").ifEmpty { "밝기 조절되는 조명을 골라주세요" },
@@ -96,7 +105,12 @@ fun LightsScreen(
                     enabled = !state.busy && state.dimmers.isNotEmpty(),
                     modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
                 ) {
-                    Text(if (state.busy) "테스트 중, 15초 뒤 원래대로 돌아가요" else "디밍 조명 테스트", color = Palette.Ink)
+                    if (state.busy) {
+                        CircularProgressIndicator(Modifier.size(16.dp), color = Palette.Mist, strokeWidth = 2.dp)
+                        Text("테스트 중, 곧 원래대로 돌아가요", color = Palette.Mist, modifier = Modifier.padding(start = 8.dp))
+                    } else {
+                        Text("디밍 조명 테스트", color = Palette.Ink)
+                    }
                 }
             }
         }
@@ -104,12 +118,12 @@ fun LightsScreen(
         Column {
             SectionLabel("SmartThings 계정")
             Row(Modifier.padding(start = 4.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Row(
+                Box(
                     Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(if (state.loggedIn) Palette.Sun else Palette.Mist),
-                ) {}
+                        .background(if (state.loggedIn) Palette.SunText else Palette.Mist),
+                )
                 Text(
                     if (state.loggedIn) "연결됨" else "연결 안 됨",
                     style = MaterialTheme.typography.bodyMedium,
@@ -120,8 +134,10 @@ fun LightsScreen(
             if (editing) {
                 CredentialsForm(state, onSaveCredentials, onLogin)
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { editing = true }) { Text("연결 정보 수정", color = Palette.Mist) }
+                // 위험 동작(연결 끊기)은 일반 동작과 떨어뜨려 배치
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { editing = true }) { Text("연결 정보 수정", color = Palette.Ink) }
+                    Spacer(Modifier.weight(1f))
                     TextButton(onClick = onLogout) { Text("연결 끊기", color = Palette.Ember) }
                 }
             }
@@ -135,8 +151,8 @@ private fun FlowStep(order: Int, title: String, body: String) {
         Text(
             "$order",
             style = MaterialTheme.typography.labelLarge,
-            color = Palette.Sun,
-            modifier = Modifier.padding(end = 14.dp, top = 1.dp),
+            color = Palette.SunText,
+            modifier = Modifier.padding(end = 16.dp),
         )
         Column {
             Text(title, style = MaterialTheme.typography.bodyLarge, color = Palette.Ink)
@@ -155,19 +171,19 @@ private fun CredentialsForm(
     var secret by remember { mutableStateOf("") }
     var redirect by remember(state.redirectUri) { mutableStateOf(state.redirectUri) }
     val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = Palette.Sun,
+        focusedBorderColor = Palette.SunText,
         unfocusedBorderColor = Palette.Line,
-        focusedLabelColor = Palette.Sun,
-        cursorColor = Palette.Sun,
+        focusedLabelColor = Palette.SunText,
+        cursorColor = Palette.SunText,
     )
 
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(MaterialTheme.shapes.medium)
             .background(Palette.Dusk)
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
             "PC에서 SmartThings CLI로 OAuth 앱을 만들고(권한 r:devices:*, x:devices:*) 받은 값을 넣어주세요. 자세한 방법은 README에 있어요.",

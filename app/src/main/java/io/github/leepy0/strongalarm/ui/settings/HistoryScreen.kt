@@ -35,7 +35,7 @@ fun HistoryScreen(lines: List<String>, onBack: () -> Unit) {
                     items.forEachIndexed { i, (_, time, msg) ->
                         if (i > 0) GroupDivider()
                         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-                            Text(time, style = MaterialTheme.typography.labelMedium, color = Palette.Mist, modifier = Modifier.width(52.dp))
+                            Text(time, style = MaterialTheme.typography.labelMedium, color = Palette.Mist, modifier = Modifier.width(48.dp))
                             Text(msg, style = MaterialTheme.typography.bodyMedium, color = Palette.Ink)
                         }
                     }

@@ -65,14 +65,14 @@ private fun PermissionGroup(items: List<PermissionItem>, onGrant: (PermissionKey
                 subtitle = item.why,
                 leading = if (item.granted) R.drawable.ic_check else R.drawable.ic_alert,
                 leadingTint = when {
-                    item.granted -> Palette.Sun
+                    item.granted -> Palette.SunText
                     item.optional -> Palette.Mist
                     else -> Palette.Ember
                 },
                 trailing = {
                     if (!item.granted) {
                         TextButton(onClick = { onGrant(item.key) }) {
-                            Text("허용", style = MaterialTheme.typography.labelLarge, color = Palette.Sun)
+                            Text("허용", style = MaterialTheme.typography.labelLarge, color = Palette.SunText)
                         }
                     }
                 },

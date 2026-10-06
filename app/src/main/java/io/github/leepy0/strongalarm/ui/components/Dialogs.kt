@@ -51,7 +51,7 @@ fun TimePickDialog(title: String, initial: LocalTime, onDismiss: () -> Unit, onC
                 colors = TimePickerDefaults.colors(
                     clockDialColor = Palette.Night,
                     timeSelectorSelectedContainerColor = Palette.SunSoft,
-                    timeSelectorSelectedContentColor = Palette.Sun,
+                    timeSelectorSelectedContentColor = Palette.SunText,
                     timeSelectorUnselectedContainerColor = Palette.Night,
                 ),
             )
@@ -116,13 +116,13 @@ fun <K> MultiSelectDialog(
                                 .clickable {
                                     selected = if (item.key in selected) selected - item.key else selected + item.key
                                 }
-                                .padding(vertical = 6.dp),
+                                .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Checkbox(
                                 checked = item.key in selected,
                                 onCheckedChange = null,
-                                colors = CheckboxDefaults.colors(checkedColor = Palette.Sun, checkmarkColor = Palette.SunInk),
+                                colors = CheckboxDefaults.colors(checkedColor = Palette.SunText, checkmarkColor = Palette.Night),
                             )
                             Column(Modifier.padding(start = 12.dp)) {
                                 Text(item.title, style = MaterialTheme.typography.bodyLarge)

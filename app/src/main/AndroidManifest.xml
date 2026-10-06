@@ -46,6 +46,7 @@
             android:launchMode="singleTask"
             android:showWhenLocked="true"
             android:taskAffinity="io.github.leepy0.strongalarm.alarm"
+            android:theme="@style/Theme.StrongAlarm.Alarm"
             android:turnScreenOn="true" />
 
         <activity

@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 다크 전용: 실행 직후 흰 화면 깜빡임 방지 -->
-    <style name="Theme.StrongAlarm" parent="android:Theme.Material.NoActionBar">
+    <!-- 실행 직후 배경을 테마 배경색과 맞춰 깜빡임 방지 (밝은 모드) -->
+    <style name="Theme.StrongAlarm" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_bg</item>
+        <item name="android:colorBackground">@color/window_bg</item>
+    </style>
+
+    <!-- 알람 화면은 항상 어둡게 -->
+    <style name="Theme.StrongAlarm.Alarm" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/night</item>
         <item name="android:colorBackground">@color/night</item>
     </style>

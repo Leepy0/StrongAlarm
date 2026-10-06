@@ -2,7 +2,6 @@ package io.github.leepy0.strongalarm.ui.rules
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,13 +9,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -47,6 +46,7 @@ data class RulesUiState(
     val calendarReadable: Boolean,
 )
 
+/** 휴무 규칙 탭: 우선순위 순서가 실제 판정 순서라 번호를 붙인 사다리로 표시 */
 @Composable
 fun RulesScreen(
     state: RulesUiState,
@@ -67,7 +67,7 @@ fun RulesScreen(
             "휴무 규칙",
             style = MaterialTheme.typography.headlineSmall,
             color = Palette.Ink,
-            modifier = Modifier.padding(top = 28.dp),
+            modifier = Modifier.padding(top = 32.dp),
         )
         Text(
             "위에서부터 먼저 맞는 규칙 하나로 그날 울릴지 정해요.",
@@ -79,11 +79,12 @@ fun RulesScreen(
         if (!state.calendarReadable) {
             Row(
                 Modifier
+                    .padding(bottom = 24.dp)
                     .fillMaxWidth()
-                    .padding(bottom = 20.dp)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(MaterialTheme.shapes.medium)
                     .background(Palette.Dusk)
                     .clickable(onClick = onGrantCalendar)
+                    .heightIn(min = 48.dp)
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -93,65 +94,58 @@ fun RulesScreen(
                     color = Palette.Ember,
                     modifier = Modifier.weight(1f),
                 )
-                Text("허용", style = MaterialTheme.typography.labelLarge, color = Palette.Sun)
+                Text("허용", style = MaterialTheme.typography.labelLarge, color = Palette.SunText)
             }
         }
 
         Step(1, "날짜별 시각 변경", ring = true) {
-            Text(
+            Hint(
                 if (state.overrideCount > 0) {
                     "알람 탭에서 날짜를 눌러 바꿔요. 지금 ${state.overrideCount}일 바꿔뒀어요."
                 } else {
                     "알람 탭에서 날짜를 눌러 그날만 시각을 바꿔요."
                 },
-                style = MaterialTheme.typography.bodySmall,
-                color = Palette.Mist,
             )
         }
         Step(2, "근무 일정", ring = true) {
-            StepHint("일정 제목에 이 단어가 있으면 주말·공휴일에도 울려요")
+            Hint("일정 제목에 이 단어가 있으면 주말·공휴일에도 울려요")
             KeywordChips(rule.workKeywords, ChipTone.SUN) { onChange(rule.copy(workKeywords = it)) }
         }
         Step(3, "휴무 일정", ring = false) {
-            StepHint("일정 제목에 이 단어가 있으면 쉬어요")
+            Hint("일정 제목에 이 단어가 있으면 쉬어요")
             KeywordChips(rule.offKeywords, ChipTone.MOON) { onChange(rule.copy(offKeywords = it)) }
-            Spacer(Modifier.height(14.dp))
-            StepHint("이 단어가 함께 있으면 휴무로 보지 않아요")
+            Spacer(Modifier.height(16.dp))
+            Hint("이 단어가 함께 있으면 휴무로 보지 않아요")
             KeywordChips(rule.excludeKeywords, ChipTone.PLAIN) { onChange(rule.copy(excludeKeywords = it)) }
         }
         Step(4, "공휴일", ring = false) {
             val names = rule.holidayCalendarIds.mapNotNull { state.calendarNames[it] }
+            val none = rule.holidayCalendarIds.isEmpty()
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(MaterialTheme.shapes.small)
                     .clickable(onClick = onPickHolidayCalendars)
-                    .padding(vertical = 6.dp),
+                    .heightIn(min = 48.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    if (rule.holidayCalendarIds.isEmpty()) "공휴일 캘린더를 골라주세요" else names.ifEmpty { listOf("선택한 캘린더") }.joinToString(", "),
+                    if (none) "공휴일 캘린더를 골라주세요" else names.ifEmpty { listOf("선택한 캘린더") }.joinToString(", "),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = if (rule.holidayCalendarIds.isEmpty()) Palette.Ember else Palette.Ink,
+                    color = if (none) Palette.Ember else Palette.Ink,
                     modifier = Modifier.weight(1f),
                 )
-                Text("변경", style = MaterialTheme.typography.labelLarge, color = Palette.Sun)
+                Text("변경", style = MaterialTheme.typography.labelLarge, color = Palette.SunText)
             }
-            Spacer(Modifier.height(10.dp))
-            StepHint("공휴일 캘린더에 있어도 무시할 기념일")
+            Spacer(Modifier.height(12.dp))
+            Hint("공휴일 캘린더에 있어도 무시할 기념일")
             KeywordChips(rule.holidayExcludeKeywords, ChipTone.PLAIN) { onChange(rule.copy(holidayExcludeKeywords = it)) }
         }
         Step(5, "주말", ring = false, last = true) {
-            StepHint("토요일과 일요일")
+            Hint("토요일과 일요일. 어디에도 해당하지 않는 평일은 울려요.")
         }
-        Text(
-            "어디에도 해당하지 않는 평일은 울려요.",
-            style = MaterialTheme.typography.bodySmall,
-            color = Palette.Mist,
-            modifier = Modifier.padding(start = 40.dp, top = 4.dp),
-        )
 
-        Spacer(Modifier.height(36.dp))
+        Spacer(Modifier.height(32.dp))
         SectionLabel("일정을 읽을 캘린더")
         Group {
             val target = if (rule.calendarIds.isEmpty()) {
@@ -178,7 +172,7 @@ fun RulesScreen(
                             checkedTrackColor = Palette.Sun,
                             uncheckedThumbColor = Palette.Mist,
                             uncheckedTrackColor = Palette.Night,
-                            uncheckedBorderColor = Palette.Line,
+                            uncheckedBorderColor = Palette.Mist,
                         ),
                     )
                 },
@@ -188,7 +182,7 @@ fun RulesScreen(
     }
 }
 
-/** 우선순위 사다리의 한 단: 번호 원 + 연결선 + 내용 */
+/** 사다리의 한 단: 번호 원 + 다음 단까지 연결선 + 내용 */
 @Composable
 private fun Step(
     order: Int,
@@ -197,29 +191,29 @@ private fun Step(
     last: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    val line = Palette.Line
     Row(
         Modifier
             .fillMaxWidth()
             .drawBehind {
                 if (!last) {
-                    val x = 13.dp.toPx()
-                    drawLine(Palette.Line, Offset(x, 30.dp.toPx()), Offset(x, size.height - 2.dp.toPx()), strokeWidth = 1.5.dp.toPx())
+                    val x = 14.dp.toPx()
+                    drawLine(line, Offset(x, 32.dp.toPx()), Offset(x, size.height), strokeWidth = 2.dp.toPx())
                 }
             },
     ) {
         Box(
             Modifier
-                .padding(top = 1.dp)
-                .size(26.dp)
+                .size(28.dp)
                 .clip(CircleShape)
                 .background(Palette.DuskHigh),
             contentAlignment = Alignment.Center,
         ) {
             Text("$order", style = MaterialTheme.typography.labelMedium, color = Palette.Ink)
         }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f).padding(bottom = if (last) 8.dp else 28.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f).padding(bottom = if (last) 8.dp else 32.dp)) {
+            Row(Modifier.height(28.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(title, style = MaterialTheme.typography.titleMedium, color = Palette.Ink)
                 Spacer(Modifier.width(8.dp))
                 OutcomeTag(ring)
@@ -231,6 +225,6 @@ private fun Step(
 }
 
 @Composable
-private fun StepHint(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = Palette.Mist, modifier = Modifier.padding(bottom = 10.dp))
+private fun Hint(text: String) {
+    Text(text, style = MaterialTheme.typography.bodySmall, color = Palette.Mist, modifier = Modifier.padding(bottom = 4.dp))
 }

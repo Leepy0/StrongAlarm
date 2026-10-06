@@ -10,19 +10,26 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,7 +42,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,6 +52,7 @@ import io.github.leepy0.strongalarm.R
 import io.github.leepy0.strongalarm.alarm.AlarmScheduler
 import io.github.leepy0.strongalarm.alarm.AlarmSession
 import io.github.leepy0.strongalarm.alarm.WatchLink
+import io.github.leepy0.strongalarm.core.DayOffRule
 import io.github.leepy0.strongalarm.core.Judgement
 import io.github.leepy0.strongalarm.core.KeywordMatcher
 import io.github.leepy0.strongalarm.core.ReasonCode
@@ -55,7 +65,6 @@ import io.github.leepy0.strongalarm.data.Stores
 import io.github.leepy0.strongalarm.lights.LightController
 import io.github.leepy0.strongalarm.lights.SmartThingsAuth
 import io.github.leepy0.strongalarm.lights.SmartThingsClient
-import io.github.leepy0.strongalarm.ui.components.AppIcon
 import io.github.leepy0.strongalarm.ui.components.MultiSelectDialog
 import io.github.leepy0.strongalarm.ui.components.SelectItem
 import io.github.leepy0.strongalarm.ui.components.TimePickDialog
@@ -95,7 +104,7 @@ private sealed interface TimeTarget {
     data class Day(val date: LocalDate) : TimeTarget
 }
 
-/** 판정 → 2주 스트립 칸 */
+/** 판정 → 2주 격자 칸 */
 fun Judgement.toCell(s: AppSettings): DayCell {
     val label = when {
         ring -> time.hhmm()
@@ -107,11 +116,18 @@ fun Judgement.toCell(s: AppSettings): DayCell {
     return DayCell(date, ring, time, s.overrides.containsKey(date.toString()), label, sentence())
 }
 
-/** 앱 전체: 하단 탭 + 하위 화면 + 시트·다이얼로그. 저장소와 화면을 연결하는 곳 */
+private fun DayOffRule.keywordCount() =
+    offKeywords.size + workKeywords.size + excludeKeywords.size + holidayExcludeKeywords.size
+
+/**
+ * 앱 전체 틀. 좁은 화면은 하단 탭, 폴드 펼친 화면(600dp 이상)은 왼쪽 레일.
+ * 저장소와 화면을 연결하고, 되돌릴 수 있는 삭제는 스낵바 '되돌리기'로 처리
+ */
 @Composable
 fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
+    val snackbar = remember { SnackbarHostState() }
     val settings by Stores.settings.flow(ctx).collectAsStateWithLifecycle()
     val appState by Stores.state.flow(ctx).collectAsStateWithLifecycle()
     val alarm by AlarmSession.state.collectAsStateWithLifecycle()
@@ -133,6 +149,15 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
     val save: ((AppSettings) -> AppSettings) -> Unit = { f ->
         Stores.settings.update(ctx, f)
         reschedule()
+    }
+
+    /** 되돌릴 수 있는 동작: 확인 없이 실행하고 스낵바로 되돌리기 제공 */
+    fun undoable(message: String, undo: () -> Unit) {
+        scope.launch {
+            snackbar.currentSnackbarData?.dismiss()
+            val r = snackbar.showSnackbar(message, actionLabel = "되돌리기", duration = SnackbarDuration.Short)
+            if (r == SnackbarResult.ActionPerformed) undo()
+        }
     }
 
     // ── 권한 ──
@@ -185,6 +210,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
     val lights = settings.lights
     val linkedCount = (lights.dimmerIds + lights.switchIds).distinct().size
     var devices by remember { mutableStateOf<List<SmartThingsClient.Device>?>(null) }
+    var loadingDevices by remember { mutableStateOf(false) }
     var lightBusy by remember { mutableStateOf(false) }
 
     // ── 시트·다이얼로그 상태 ──
@@ -193,6 +219,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
     var timeTarget by remember { mutableStateOf<TimeTarget?>(null) }
     var calendarDialog by remember { mutableStateOf<String?>(null) } // holiday | target
     var deviceDialog by remember { mutableStateOf<String?>(null) }   // dimmer | switch
+    var confirmLogout by remember { mutableStateOf(false) }
 
     LaunchedEffect(overrideRequest) {
         if (overrideRequest != null) {
@@ -212,26 +239,94 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
     fun setOverride(date: LocalDate, time: LocalTime) =
         save { it.copy(overrides = it.overrides + (date.toString() to time.toString())) }
 
-    fun clearOverride(date: LocalDate) = save { it.copy(overrides = it.overrides - date.toString()) }
-
-    fun pickDevices(kind: String) {
-        scope.launch {
-            if (devices == null) devices = SmartThingsClient.listDevices(ctx)
-            if (devices == null) {
-                Toast.makeText(ctx, "기기 목록을 불러오지 못했어요. 연결을 확인해주세요.", Toast.LENGTH_SHORT).show()
-            } else {
-                deviceDialog = kind
-            }
+    fun clearOverride(date: LocalDate) {
+        val old = settings.overrides[date.toString()]
+        save { it.copy(overrides = it.overrides - date.toString()) }
+        if (old != null) {
+            undoable("${date.pretty()} 바꾼 시각을 취소했어요") { save { it.copy(overrides = it.overrides + (date.toString() to old)) } }
         }
     }
 
-    Scaffold(
+    fun changeRule(r: DayOffRule) {
+        val old = settings.rule
+        save { it.copy(rule = r) }
+        if (r.keywordCount() < old.keywordCount()) {
+            undoable("키워드를 지웠어요") { save { it.copy(rule = old) } }
+        }
+    }
+
+    fun pickDevices(kind: String) {
+        scope.launch {
+            if (devices == null) {
+                loadingDevices = true
+                devices = SmartThingsClient.listDevices(ctx)
+                loadingDevices = false
+            }
+            if (devices != null) {
+                deviceDialog = kind
+                return@launch
+            }
+            // 실패: 무엇·왜·해결법 + 다시 시도
+            val r = snackbar.showSnackbar(
+                "기기 목록을 못 불러왔어요. 인터넷과 SmartThings 연결을 확인해주세요.",
+                actionLabel = "다시 시도",
+                duration = SnackbarDuration.Long,
+            )
+            if (r == SnackbarResult.ActionPerformed) pickDevices(kind)
+        }
+    }
+
+    // ── 내비게이션: 폭 600dp 이상이면 레일, 하위 화면에선 숨김 ──
+    val wide = LocalConfiguration.current.screenWidthDp >= 600
+    val layoutType = when {
+        sub != null -> NavigationSuiteType.None
+        wide -> NavigationSuiteType.NavigationRail
+        else -> NavigationSuiteType.NavigationBar
+    }
+    val itemColors = NavigationSuiteDefaults.itemColors(
+        navigationBarItemColors = NavigationBarItemDefaults.colors(
+            selectedIconColor = Palette.SunText,
+            selectedTextColor = Palette.SunText,
+            indicatorColor = Palette.SunSoft,
+            unselectedIconColor = Palette.Mist,
+            unselectedTextColor = Palette.Mist,
+        ),
+        navigationRailItemColors = NavigationRailItemDefaults.colors(
+            selectedIconColor = Palette.SunText,
+            selectedTextColor = Palette.SunText,
+            indicatorColor = Palette.SunSoft,
+            unselectedIconColor = Palette.Mist,
+            unselectedTextColor = Palette.Mist,
+        ),
+    )
+
+    NavigationSuiteScaffold(
+        navigationSuiteItems = {
+            Tab.entries.forEach { t ->
+                item(
+                    selected = t == tab,
+                    onClick = { tab = t },
+                    icon = { Icon(painterResource(t.icon), contentDescription = null) },
+                    label = { Text(t.label) },
+                    colors = itemColors,
+                )
+            }
+        },
+        layoutType = layoutType,
+        navigationSuiteColors = NavigationSuiteDefaults.colors(
+            navigationBarContainerColor = Palette.Dusk,
+            navigationRailContainerColor = Palette.Dusk,
+        ),
         containerColor = Palette.Night,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        bottomBar = { if (sub == null) BottomBar(tab) { tab = it } },
-    ) { pad ->
-        Box(Modifier.fillMaxSize().padding(pad), contentAlignment = Alignment.TopCenter) {
-            // 폴드 펼친 화면에서 너무 넓어지지 않게
+    ) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                // 레일일 때는 하단 바가 없으니 제스처 바 영역을 직접 비움
+                .then(if (layoutType == NavigationSuiteType.NavigationRail) Modifier.navigationBarsPadding() else Modifier),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            // 폴드 펼친 화면에서 줄 길이가 너무 길어지지 않게
             Box(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
                 when (sub) {
                     Sub.LIGHTS -> LightsScreen(
@@ -246,6 +341,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                             switchDelayMinutes = lights.switchDelayMinutes,
                             autoOffMinutes = lights.autoOffMinutes,
                             busy = lightBusy,
+                            loadingDevices = loadingDevices,
                         ),
                         onBack = { sub = null },
                         onSaveCredentials = { id, secret, redirect ->
@@ -253,11 +349,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                             if (secret.isNotBlank()) SmartThingsAuth.saveClientSecret(ctx, secret)
                         },
                         onLogin = { ctx.startActivity(Intent(ctx, SmartThingsLoginActivity::class.java)) },
-                        onLogout = {
-                            SmartThingsAuth.logout(ctx)
-                            devices = null
-                            tick++
-                        },
+                        onLogout = { confirmLogout = true },
                         onPickDimmers = { pickDevices("dimmer") },
                         onPickSwitches = { pickDevices("switch") },
                         onTest = {
@@ -281,8 +373,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
 
                     null -> when (tab) {
                         Tab.ALARM -> {
-                            val nextPlan = appState.next
-                            val next = nextPlan?.let { p ->
+                            val next = appState.next?.let { p ->
                                 val date = LocalDate.parse(p.date)
                                 NextAlarm(
                                     date = date,
@@ -321,7 +412,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                                 overrideCount = settings.overrides.size,
                                 calendarReadable = calendarReadable,
                             ),
-                            onChange = { r -> save { it.copy(rule = r) } },
+                            onChange = ::changeRule,
                             onPickHolidayCalendars = { calendarDialog = "holiday" },
                             onPickTargetCalendars = { calendarDialog = "target" },
                             onGrantCalendar = { grant(PermissionKey.CALENDAR) },
@@ -349,6 +440,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                     }
                 }
             }
+            SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
         }
     }
 
@@ -449,39 +541,41 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
             save { it.copy(lights = it.lights.copy(switchIds = sel.toList(), deviceLabels = labels(sel))) }
         }
     }
-}
 
-@Composable
-private fun BottomBar(current: Tab, onSelect: (Tab) -> Unit) {
-    Column {
-        HorizontalDivider(thickness = 1.dp, color = Palette.Line)
-        NavigationBar(containerColor = Palette.Night, tonalElevation = 0.dp) {
-            Tab.entries.forEach { t ->
-                val selected = t == current
-                NavigationBarItem(
-                    selected = selected,
-                    onClick = { onSelect(t) },
-                    icon = { AppIcon(t.icon, if (selected) Palette.Sun else Palette.Mist) },
-                    label = { Text(t.label) },
-                    colors = NavigationBarItemDefaults.colors(
-                        indicatorColor = Palette.SunSoft,
-                        selectedTextColor = Palette.Sun,
-                        unselectedTextColor = Palette.Mist,
-                    ),
+    // ── 연결 끊기 확인 (되돌릴 수 없음: 다시 로그인 필요) ──
+    if (confirmLogout) {
+        AlertDialog(
+            onDismissRequest = { confirmLogout = false },
+            containerColor = Palette.Dusk,
+            title = { Text("SmartThings 연결을 끊을까요?", style = MaterialTheme.typography.titleLarge) },
+            text = {
+                Text(
+                    "알람 날 조명 제어가 멈춰요. 다시 쓰려면 로그인을 다시 해야 해요. 고른 조명 목록은 남아요.",
+                    color = Palette.Mist,
                 )
-            }
-        }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmLogout = false
+                    SmartThingsAuth.logout(ctx)
+                    devices = null
+                    tick++
+                    scope.launch(Dispatchers.IO) { HistoryLog.add(ctx, "SmartThings 연결 끊음") }
+                }) { Text("연결 끊기", color = Palette.Ember) }
+            },
+            dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text("취소", color = Palette.Ink) } },
+        )
     }
 }
 
-/** 스냅샷 → 10초 동안 1→목표 밝기 → 5초 유지 → 원래대로 */
+/** 스냅샷 → 약 8초 동안 1→목표 밝기 → 2초 유지 → 원래대로 (10초 이내라 스피너만 표시) */
 private suspend fun lightTest(ctx: Context, ids: List<String>, target: Int) = withContext(Dispatchers.IO) {
     val snap = LightController.snapshot(ctx, ids)
     val targets = ids.filter { snap[it]?.on != true }
-    for (i in 0..5) {
-        LightController.setLevels(ctx, targets, 1 + (target - 1) * i / 5, turnOn = true)
-        delay(2_000)
+    for (i in 0..4) {
+        LightController.setLevels(ctx, targets, 1 + (target - 1) * i / 4, turnOn = true)
+        delay(1_600)
     }
-    delay(5_000)
+    delay(2_000)
     LightController.restore(ctx, SessionState("test", 0, Phase.DONE, snap, dimmersTouched = true), "조명 테스트 복구")
 }

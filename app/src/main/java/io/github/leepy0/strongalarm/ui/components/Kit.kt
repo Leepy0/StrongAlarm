@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -25,7 +24,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -35,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,10 +54,10 @@ import io.github.leepy0.strongalarm.R
 import io.github.leepy0.strongalarm.ui.theme.Palette
 
 /** 화면 좌우 여백 */
-val ScreenPadding = 20.dp
+val ScreenPadding = 16.dp
 
 @Composable
-fun AppIcon(@DrawableRes id: Int, tint: Color, modifier: Modifier = Modifier, size: Int = 22) {
+fun AppIcon(@DrawableRes id: Int, tint: Color, modifier: Modifier = Modifier, size: Int = 24) {
     Icon(painterResource(id), contentDescription = null, tint = tint, modifier = modifier.size(size.dp))
 }
 
@@ -73,13 +72,13 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** 설정 행 묶음 (한 덩어리의 둥근 표면) */
+/** 설정 행 묶음: 테두리 없이 배경 차이로 묶음 */
 @Composable
 fun Group(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(MaterialTheme.shapes.medium)
             .background(Palette.Dusk),
         content = content,
     )
@@ -130,7 +129,7 @@ fun RowItem(
         }
         trailing?.invoke()
         if (onClick != null && trailing == null) {
-            AppIcon(R.drawable.ic_chevron, Palette.Mist, Modifier.padding(start = 6.dp), size = 18)
+            AppIcon(R.drawable.ic_chevron, Palette.Mist, Modifier.padding(start = 8.dp), size = 20)
         }
     }
 }
@@ -160,11 +159,11 @@ fun Subpage(title: String, onBack: () -> Unit, content: @Composable ColumnScope.
 
 enum class ChipTone { SUN, MOON, PLAIN }
 
-/** 키워드 칩: ✕로 삭제, '추가'로 입력 */
+/** 키워드 칩: 칩을 누르면 삭제(되돌리기는 호출 측 스낵바), '추가'로 입력. 터치 영역 48dp */
 @Composable
 fun KeywordChips(keywords: List<String>, tone: ChipTone, onChange: (List<String>) -> Unit) {
     val (bg, fg) = when (tone) {
-        ChipTone.SUN -> Palette.SunSoft to Palette.Sun
+        ChipTone.SUN -> Palette.SunSoft to Palette.SunText
         ChipTone.MOON -> Palette.MoonSoft to Palette.Moon
         ChipTone.PLAIN -> Palette.DuskHigh to Palette.Ink
     }
@@ -179,27 +178,29 @@ fun KeywordChips(keywords: List<String>, tone: ChipTone, onChange: (List<String>
         adding = false
     }
 
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         keywords.forEach { k ->
             Row(
                 Modifier
+                    .minimumInteractiveComponentSize()
                     .clip(CircleShape)
                     .background(bg)
                     .clickable { onChange(keywords - k) }
-                    .padding(start = 14.dp, end = 10.dp, top = 7.dp, bottom = 7.dp),
+                    .padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(k, style = MaterialTheme.typography.labelLarge, color = fg)
-                AppIcon(R.drawable.ic_close, fg.copy(alpha = 0.7f), Modifier.padding(start = 6.dp), size = 14)
+                AppIcon(R.drawable.ic_close, fg, Modifier.padding(start = 8.dp), size = 16)
             }
         }
         if (adding) {
             Box(
                 Modifier
+                    .minimumInteractiveComponentSize()
                     .clip(CircleShape)
                     .border(1.dp, fg, CircleShape)
-                    .padding(horizontal = 14.dp, vertical = 7.dp)
-                    .width(110.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .width(112.dp),
             ) {
                 BasicTextField(
                     value = input,
@@ -216,39 +217,40 @@ fun KeywordChips(keywords: List<String>, tone: ChipTone, onChange: (List<String>
         } else {
             Row(
                 Modifier
+                    .minimumInteractiveComponentSize()
                     .clip(CircleShape)
                     .border(1.dp, Palette.Line, CircleShape)
                     .clickable { adding = true }
-                    .padding(start = 10.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
+                    .padding(start = 12.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AppIcon(R.drawable.ic_plus, Palette.Mist, Modifier.padding(end = 4.dp), size = 14)
+                AppIcon(R.drawable.ic_plus, Palette.Mist, Modifier.padding(end = 4.dp), size = 16)
                 Text("추가", style = MaterialTheme.typography.labelLarge, color = Palette.Mist)
             }
         }
     }
 }
 
-/** 결과 꼬리표: 울림(해) / 쉼(달) */
+/** 결과 꼬리표: 울림 / 쉼 (색 + 글자) */
 @Composable
 fun OutcomeTag(ring: Boolean) {
-    val (bg, fg, text) = if (ring) Triple(Palette.SunSoft, Palette.Sun, "울림") else Triple(Palette.MoonSoft, Palette.Moon, "쉼")
+    val (bg, fg, text) = if (ring) Triple(Palette.SunSoft, Palette.SunText, "울림") else Triple(Palette.MoonSoft, Palette.Moon, "쉼")
     Text(
         text,
         style = MaterialTheme.typography.labelSmall,
         color = fg,
         modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(MaterialTheme.shapes.small)
             .background(bg)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+            .padding(horizontal = 8.dp, vertical = 4.dp),
     )
 }
 
-/** 상태 줄: 아이콘 + 문장 + 선택 동작 */
+/** 상태 줄: 아이콘 + 문장 + 선택 동작. ok=null은 중립 */
 @Composable
 fun StatusLine(ok: Boolean?, text: String, action: String? = null, onAction: (() -> Unit)? = null) {
     val tint = when (ok) {
-        true -> Palette.Sun
+        true -> Palette.SunText
         false -> Palette.Ember
         null -> Palette.Mist
     }
@@ -256,10 +258,11 @@ fun StatusLine(ok: Boolean?, text: String, action: String? = null, onAction: (()
         Modifier
             .fillMaxWidth()
             .then(if (onAction != null) Modifier.clickable(onClick = onAction) else Modifier)
-            .padding(vertical = 10.dp),
+            .heightIn(min = 48.dp)
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AppIcon(if (ok == false) R.drawable.ic_alert else R.drawable.ic_check, tint, size = 18)
+        AppIcon(if (ok == false) R.drawable.ic_alert else R.drawable.ic_check, tint, size = 20)
         Spacer(Modifier.width(12.dp))
         Text(
             text,
@@ -268,10 +271,7 @@ fun StatusLine(ok: Boolean?, text: String, action: String? = null, onAction: (()
             modifier = Modifier.weight(1f),
         )
         if (action != null) {
-            Text(action, style = MaterialTheme.typography.labelLarge, color = Palette.Sun)
+            Text(action, style = MaterialTheme.typography.labelLarge, color = Palette.SunText)
         }
     }
 }
-
-@Composable
-fun VSpace(dp: Int) = Spacer(Modifier.height(dp.dp))

@@ -70,9 +70,9 @@ class ScreenshotTest {
             )
         }
 
-    private fun shot(name: String, content: @Composable () -> Unit) {
+    private fun shot(name: String, dark: Boolean = true, content: @Composable () -> Unit) {
         compose.setContent {
-            AppTheme(font) {
+            AppTheme(dark = dark, fontFamily = font) {
                 Box(Modifier.fillMaxSize().background(Palette.Night)) { content() }
             }
         }
@@ -194,6 +194,26 @@ class ScreenshotTest {
     @Test fun alarmPaused() = shot("12_alarm_paused") {
         AlarmScreen(AlarmUiState(LocalTime.of(7, 1), "평일이에요", false, 0, 0, 0, 30, true), {}, {}, {})
     }
+
+    // ── 밝은 모드 ──
+    @Test fun homeLight() = shot("21_home_light", dark = false) { HomeScreen(home, {}, {}, {}, {}, {}) }
+
+    @Test fun rulesLight() = shot("22_rules_light", dark = false) {
+        RulesScreen(
+            RulesUiState(DayOffRule(holidayCalendarIds = setOf(9L)), mapOf(9L to "대한민국의 휴일"), 1, true),
+            {}, {}, {}, {},
+        )
+    }
+
+    @Test fun settingsLight() = shot("23_settings_light", dark = false) {
+        SettingsScreen(SettingsUiState(stepGoal = 30, lightsSummary = "3개", missingPermissions = 1), {}, {}, {}, {}, {})
+    }
+
+    @Test fun daySheetLight() = shot("24_day_sheet_light", dark = false) {
+        Box(Modifier.background(Palette.Dusk).padding(top = 24.dp)) { DaySheetContent(days[8], seven, {}, {}, {}) }
+    }
+
+    @Test fun homeLoading() = shot("25_home_loading") { HomeScreen(home.copy(days = emptyList(), next = null), {}, {}, {}, {}, {}) }
 
     @Config(qualifiers = "w720dp-h800dp-xxhdpi")
     @Test fun homeWide() = shot("13_home_wide") { HomeScreen(home, {}, {}, {}, {}, {}) }

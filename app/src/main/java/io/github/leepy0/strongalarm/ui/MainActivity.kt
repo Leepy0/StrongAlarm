@@ -1,10 +1,8 @@
 package io.github.leepy0.strongalarm.ui
 
 import android.content.Intent
-import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableStateOf
@@ -26,11 +24,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 다크 전용 테마라 시스템 바도 밝은 아이콘
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-        )
+        // 시스템 바 아이콘 색은 시스템 다크 모드를 따름
+        enableEdgeToEdge()
         handleIntent(intent)
         setContent {
             AppTheme {

@@ -8,7 +8,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,7 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -56,72 +58,85 @@ data class AlarmUiState(
     val steps get() = maxOf(phoneSteps, watchSteps)
 }
 
-/** 알람 화면: 시계 · 걸음 링 · 쉬는 날 버튼(5초) */
+/**
+ * 알람 화면. 핵심 상태 = 걸음 진행, 주요 행동 = 쉬는 날 버튼(화면 아래 엄지 영역).
+ * 화면이 낮으면(커버 화면 가로 등) 스크롤로 전환
+ */
 @Composable
 fun AlarmScreen(state: AlarmUiState, onPress: () -> Unit, onCancel: () -> Unit, onComplete: () -> Unit) {
-    Column(
+    BoxWithConstraints(
         Modifier
             .fillMaxSize()
             .background(Palette.Night)
             .statusBarsPadding()
-            .navigationBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .navigationBarsPadding(),
     ) {
-        Spacer(Modifier.height(32.dp))
-        Text(state.now.hhmm(), style = MaterialTheme.typography.displayLarge, color = Palette.Ink)
-        Text(
-            if (state.test) "테스트 알람" else "일어날 시간이에요",
-            style = MaterialTheme.typography.bodyLarge,
-            color = Palette.Mist,
-        )
-
-        Spacer(Modifier.height(36.dp))
-        StepRing(state.steps, state.goal)
-        Spacer(Modifier.height(16.dp))
-        Text(
-            if (state.watchNodes > 0) {
-                "워치 ${state.watchSteps}걸음, 폰 ${state.phoneSteps}걸음"
-            } else {
-                "워치 연결 안 됨, 폰을 들고 걸어주세요"
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = Palette.Mist,
-            textAlign = TextAlign.Center,
-        )
-
-        Spacer(Modifier.height(48.dp))
-        HoldToRest(state.paused, onPress, onCancel, onComplete)
-        Spacer(Modifier.height(24.dp))
+        val tall = maxHeight >= 600.dp
+        Column(
+            Modifier
+                .fillMaxSize()
+                .then(if (tall) Modifier else Modifier.verticalScroll(rememberScrollState()))
+                .padding(horizontal = 24.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(state.now.hhmm(), style = MaterialTheme.typography.headlineSmall, color = Palette.Ink)
+            Text(
+                if (state.test) "테스트 알람" else "일어날 시간이에요",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Palette.Mist,
+            )
+            Gap(tall, 32)
+            StepRing(state.steps, state.goal)
+            Spacer(Modifier.height(16.dp))
+            Text(
+                if (state.watchNodes > 0) {
+                    "워치 ${state.watchSteps}걸음, 폰 ${state.phoneSteps}걸음"
+                } else {
+                    "워치 연결 안 됨, 폰을 들고 걸어주세요"
+                },
+                style = MaterialTheme.typography.bodyLarge,
+                color = Palette.Mist,
+                textAlign = TextAlign.Center,
+            )
+            Gap(tall, 48)
+            HoldToRest(state.paused, onPress, onCancel, onComplete)
+        }
     }
+}
+
+/** 키 큰 화면에선 남는 공간을 나눠 갖고, 낮은 화면에선 고정 간격 */
+@Composable
+private fun ColumnScope.Gap(tall: Boolean, fixed: Int) {
+    if (tall) Spacer(Modifier.weight(1f)) else Spacer(Modifier.height(fixed.dp))
 }
 
 @Composable
 private fun StepRing(steps: Int, goal: Int) {
     val target = (steps.toFloat() / goal.coerceAtLeast(1)).coerceIn(0f, 1f)
     val progress by animateFloatAsState(target, tween(400), label = "steps")
-    Box(Modifier.size(220.dp), contentAlignment = Alignment.Center) {
+    val track = Palette.Line
+    val fill = Palette.Sun
+    Box(Modifier.size(240.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            val stroke = 14.dp.toPx()
+            val stroke = 16.dp.toPx()
             val inset = stroke / 2
             val arcSize = Size(size.width - stroke, size.height - stroke)
-            drawArc(Palette.Line, 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
+            drawArc(track, 0f, 360f, false, Offset(inset, inset), arcSize, style = Stroke(stroke))
             if (progress > 0f) {
-                drawArc(
-                    Palette.Sun, -90f, 360f * progress, false, Offset(inset, inset), arcSize,
-                    style = Stroke(stroke, cap = StrokeCap.Round),
-                )
+                drawArc(fill, -90f, 360f * progress, false, Offset(inset, inset), arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("$steps", style = MaterialTheme.typography.displaySmall, color = Palette.Ink)
-            Text("/ $goal 걸음", style = MaterialTheme.typography.bodyMedium, color = Palette.Mist)
+            Text("$steps", style = MaterialTheme.typography.displayLarge, color = Palette.Ink)
+            Text("/ $goal 걸음", style = MaterialTheme.typography.bodyLarge, color = Palette.Mist)
         }
     }
 }
 
-/** 누르는 동안 알람 일시정지, 5초 유지하면 쉬는 날로 종료, 중간에 떼면 다시 울림 */
+/**
+ * 쉬는 날 버튼: 누르는 동안 알람 일시정지, 5초 유지하면 종료, 중간에 떼면 다시 울림.
+ * 알람을 끄는 위험 동작이라 길게 누르기로 보호
+ */
 @Composable
 private fun HoldToRest(paused: Boolean, onPress: () -> Unit, onCancel: () -> Unit, onComplete: () -> Unit) {
     val progress = remember { Animatable(0f) }
@@ -135,7 +150,7 @@ private fun HoldToRest(paused: Boolean, onPress: () -> Unit, onCancel: () -> Uni
             Modifier
                 .fillMaxWidth()
                 .height(64.dp)
-                .clip(RoundedCornerShape(32.dp))
+                .clip(CircleShape)
                 .background(Palette.Dusk)
                 .pointerInput(Unit) {
                     detectTapGestures(onPress = {
@@ -173,7 +188,7 @@ private fun HoldToRest(paused: Boolean, onPress: () -> Unit, onCancel: () -> Uni
             "걸음을 채우면 자동으로 꺼져요",
             style = MaterialTheme.typography.bodySmall,
             color = Palette.Mist,
-            modifier = Modifier.padding(top = 10.dp),
+            modifier = Modifier.padding(top = 12.dp),
         )
     }
 }
