@@ -1,0 +1,57 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: |
+          set -o pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon :core:test :app:assembleDebug :wear:assembleDebug 2>&1 | tee build.log
+
+      # 폰·워치 APK를 'latest' 릴리스에 게시 (매 빌드마다 교체)
+      - name: Publish APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk StrongAlarm-phone.apk
+          cp wear/build/outputs/apk/debug/wear-debug.apk StrongAlarm-watch.apk
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest StrongAlarm-phone.apk StrongAlarm-watch.apk \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "최신 빌드 (${GITHUB_SHA::7})" \
+            --notes "main ${GITHUB_SHA::7} debug 빌드. 폰: StrongAlarm-phone.apk / 워치: StrongAlarm-watch.apk"
+
+      # 성공·실패와 관계없이 빌드 로그 보관
+      - name: Publish log
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -f build.log ] || echo "build.log 없음" > build.log
+          gh release view ci-log >/dev/null 2>&1 || \
+            gh release create ci-log --prerelease --title "CI 로그" --notes "마지막 빌드 로그"
+          gh release upload ci-log build.log --clobber

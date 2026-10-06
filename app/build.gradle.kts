@@ -20,6 +20,16 @@ android {
         versionName = "0.1.0"
     }
 
+    // 폰·워치·CI 빌드가 같은 서명을 쓰도록 고정 debug 키 사용
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false

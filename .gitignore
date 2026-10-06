@@ -12,3 +12,6 @@ build/
 *.aab
 *.keystore
 *.jks
+
+# 고정 debug 서명 키는 커밋 (폰·워치·CI 빌드 서명 일치용)
+!keystore/debug.keystore
