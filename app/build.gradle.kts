@@ -16,8 +16,12 @@ android {
         applicationId = "io.github.leepy0.strongalarm"
         minSdk = 34
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI가 커밋 수로 버전을 넘겨줌 (자동 업데이트 비교용). 로컬 빌드는 1
+        val appVersion = System.getenv("APP_VERSION_CODE")?.toIntOrNull() ?: 1
+        versionCode = appVersion
+        versionName = "0.2.$appVersion"
+        // 이 폰 빌드와 짝이 되는 워치 앱 버전 (워치 업데이트 필요 여부 안내용)
+        buildConfigField("int", "WATCH_VERSION_CODE", System.getenv("WATCH_VERSION_CODE") ?: "1")
     }
 
     // 폰·워치·CI 빌드가 같은 서명을 쓰도록 고정 debug 키 사용
@@ -43,7 +47,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 
     // 사이드로드 전용: Play 정책성 lint(USE_EXACT_ALARM 등)로 release 빌드가 막히지 않도록
     lint { checkReleaseBuilds = false }

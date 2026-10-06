@@ -69,6 +69,12 @@
             android:directBootAware="true"
             android:exported="false" />
 
+        <!-- 새 버전 확인 (6시간 주기) -->
+        <service
+            android:name=".update.UpdateJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <receiver
             android:name=".alarm.BootReceiver"
             android:directBootAware="true"

@@ -91,6 +91,10 @@ data class AppState(
     val lastResultAt: Long? = null,
     /** SmartThings 토큰 갱신이 거부됨 → 재로그인 필요 */
     val lightsAuthError: Boolean = false,
+    /** 마지막 업데이트 확인 시각 */
+    val updateCheckedAt: Long? = null,
+    /** 새 버전 알림을 보낸 마지막 versionCode (같은 버전 중복 알림 방지) */
+    val updateNotifiedVersion: Int = 0,
 )
 
 object Stores {

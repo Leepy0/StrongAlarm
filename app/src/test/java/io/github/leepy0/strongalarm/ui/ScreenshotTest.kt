@@ -26,6 +26,7 @@ import io.github.leepy0.strongalarm.ui.home.NextAlarm
 import io.github.leepy0.strongalarm.ui.home.Readiness
 import io.github.leepy0.strongalarm.ui.rules.RulesScreen
 import io.github.leepy0.strongalarm.ui.rules.RulesUiState
+import io.github.leepy0.strongalarm.ui.settings.AppVersionUi
 import io.github.leepy0.strongalarm.ui.settings.HistoryScreen
 import io.github.leepy0.strongalarm.ui.settings.LightTestState
 import io.github.leepy0.strongalarm.ui.settings.LightsScreen
@@ -126,8 +127,10 @@ class ScreenshotTest {
         nowMillis = NOW,
     )
 
+    private val appUi = AppVersionUi(installed = "0.2.12", status = "최신이에요 · 5분 전 확인")
+
     @Composable
-    private fun Home(state: HomeUiState) = HomeScreen(state, {}, {}, {}, {}, {}, {})
+    private fun Home(state: HomeUiState) = HomeScreen(state, {}, {}, {}, {}, {}, {}, {})
 
     private val permissions = listOf(
         PermissionItem(PermissionKey.NOTIFICATIONS, "알림", "알람 화면과 23시 안내를 띄워요", true),
@@ -173,7 +176,7 @@ class ScreenshotTest {
     }
 
     @Test fun settings() = shot("06_settings") {
-        SettingsScreen(SettingsUiState(stepGoal = 30, alarmVolume = 80, lightsSummary = "3개", missingPermissions = 1), {}, {}, {}, {}, {}, {}, {})
+        SettingsScreen(SettingsUiState(stepGoal = 30, alarmVolume = 80, lightsSummary = "3개", missingPermissions = 1, app = appUi), {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
     }
 
     @Test fun lightsConnected() = shot("07_lights") { LightsScreen(lights, {}, { _, _, _ -> }, {}, {}, {}, {}, {}, {}) }
@@ -210,6 +213,7 @@ class ScreenshotTest {
                     missingPermissions = 0,
                     lastCheckCalendarOk = false,
                     lightsAuthError = true,
+                    newVersion = "0.2.15",
                 ),
             ),
         )
@@ -223,6 +227,20 @@ class ScreenshotTest {
         AlarmScreen(
             AlarmUiState(LocalTime.of(7, 1), "평일이에요", false, 4, 0, 1, 30, false, sensorNote = "워치: 신체 활동 권한 없음"),
             {}, {}, {},
+        )
+    }
+
+    @Test fun settingsUpdate() = shot("18_settings_update") {
+        SettingsScreen(
+            SettingsUiState(
+                stepGoal = 30, alarmVolume = 80, lightsSummary = "3개", missingPermissions = 0,
+                app = AppVersionUi(
+                    installed = "0.2.12", newVersion = "0.2.15",
+                    notes = listOf("자동 업데이트 확인", "홈: 남은 시간 표시, 월~일 달력", "걸음 수 집계 보강"),
+                    watchChanged = true,
+                ),
+            ),
+            {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
         )
     }
 
@@ -241,7 +259,7 @@ class ScreenshotTest {
     }
 
     @Test fun settingsLight() = shot("23_settings_light", dark = false) {
-        SettingsScreen(SettingsUiState(stepGoal = 30, alarmVolume = 80, lightsSummary = "3개", missingPermissions = 1), {}, {}, {}, {}, {}, {}, {})
+        SettingsScreen(SettingsUiState(stepGoal = 30, alarmVolume = 80, lightsSummary = "3개", missingPermissions = 1, app = appUi), {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
     }
 
     @Test fun daySheetLight() = shot("24_day_sheet_light", dark = false) {

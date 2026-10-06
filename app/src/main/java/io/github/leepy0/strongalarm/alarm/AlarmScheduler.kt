@@ -14,6 +14,7 @@ import io.github.leepy0.strongalarm.data.HistoryLog
 import io.github.leepy0.strongalarm.data.NextPlan
 import io.github.leepy0.strongalarm.data.Stores
 import io.github.leepy0.strongalarm.ui.MainActivity
+import io.github.leepy0.strongalarm.update.UpdateJob
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -106,6 +107,7 @@ object AlarmScheduler {
         }
         scheduleNightly(ctx)
         CalendarChangeJob.schedule(ctx)
+        UpdateJob.schedule(ctx)
     }
 
     /** 캘린더를 읽을 수 있을 때 오늘~모레 판정을 캐시 (잠금 상태 재부팅 대비). 일회성 변경은 제외하고 저장 */

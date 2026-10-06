@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -41,9 +45,24 @@ data class SettingsUiState(
     val alarmVolume: Int = 100,
     /** 미리 듣기 재생 중 */
     val previewing: Boolean = false,
+    val app: AppVersionUi = AppVersionUi("0.2.1"),
     /** null = 조명 미사용 */
     val lightsSummary: String?,
     val missingPermissions: Int,
+)
+
+/** 앱 버전·업데이트 상태 */
+data class AppVersionUi(
+    val installed: String,
+    /** 새 버전 이름. null = 없음 */
+    val newVersion: String? = null,
+    /** 설치된 버전 이후 변경 내역 (최신순) */
+    val notes: List<String> = emptyList(),
+    /** 확인 상태 문장. 예: "최신이에요 · 5분 전 확인" */
+    val status: String = "",
+    val checking: Boolean = false,
+    /** 새 버전에서 워치 앱도 바뀜 */
+    val watchChanged: Boolean = false,
 )
 
 @Composable
@@ -56,6 +75,9 @@ fun SettingsScreen(
     onOpenPermissions: () -> Unit,
     onTestAlarm: () -> Unit,
     onOpenHistory: () -> Unit,
+    onCheckUpdate: () -> Unit,
+    onDownloadPhone: () -> Unit,
+    onDownloadWatch: () -> Unit,
 ) {
     Column(
         Modifier
@@ -124,6 +146,73 @@ fun SettingsScreen(
                 RowItem(title = "기록", subtitle = "판정, 울림, 해제, 조명 동작", onClick = onOpenHistory)
             }
         }
+
+        Column(Modifier.padding(bottom = 24.dp)) {
+            SectionLabel("앱")
+            Group { AppVersionRows(state.app, onCheckUpdate, onDownloadPhone, onDownloadWatch) }
+        }
+    }
+}
+
+/** 버전·새 버전 안내. 설치는 브라우저 다운로드 → 시스템 설치 화면 */
+@Composable
+private fun AppVersionRows(
+    app: AppVersionUi,
+    onCheck: () -> Unit,
+    onDownloadPhone: () -> Unit,
+    onDownloadWatch: () -> Unit,
+) {
+    if (app.newVersion == null) {
+        RowItem(
+            title = "버전 ${app.installed}",
+            subtitle = app.status,
+            trailing = {
+                if (app.checking) {
+                    CircularProgressIndicator(Modifier.padding(end = 12.dp).size(20.dp), color = Palette.Mist, strokeWidth = 2.dp)
+                } else {
+                    TextButton(onClick = onCheck) { Text("확인", color = Palette.Ink) }
+                }
+            },
+        )
+        return
+    }
+    RowItem(
+        title = "새 버전 ${app.newVersion}",
+        subtitle = "지금 ${app.installed} · 설정은 그대로 남아요",
+        trailing = {
+            Button(
+                onClick = onDownloadPhone,
+                colors = ButtonDefaults.buttonColors(containerColor = Palette.Sun, contentColor = Palette.SunInk),
+                modifier = Modifier.padding(end = 8.dp),
+            ) { Text("받기") }
+        },
+    )
+    if (app.notes.isNotEmpty()) {
+        Column(
+            Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            app.notes.take(5).forEach { n ->
+                Text("· $n", style = MaterialTheme.typography.bodySmall, color = Palette.Mist)
+            }
+            if (app.notes.size > 5) {
+                Text("외 ${app.notes.size - 5}건", style = MaterialTheme.typography.bodySmall, color = Palette.Mist)
+            }
+        }
+    }
+    Text(
+        "받기를 누르면 브라우저로 내려받아요. 다운로드 알림을 눌러 설치해주세요.",
+        style = MaterialTheme.typography.bodySmall,
+        color = Palette.Mist,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+    )
+    if (app.watchChanged) {
+        GroupDivider()
+        RowItem(
+            title = "워치 앱도 바뀌었어요",
+            subtitle = "워치 APK를 받아 Wear Installer로 설치해주세요",
+            onClick = onDownloadWatch,
+        )
     }
 }
 

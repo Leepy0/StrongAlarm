@@ -80,6 +80,8 @@ data class Readiness(
     val lastResultAt: Long? = null,
     /** SmartThings 재로그인 필요 */
     val lightsAuthError: Boolean = false,
+    /** 새 앱 버전 이름. null = 최신 */
+    val newVersion: String? = null,
 )
 
 data class HomeUiState(
@@ -115,6 +117,7 @@ fun HomeScreen(
     onOpenPermissions: () -> Unit,
     onOpenRules: () -> Unit,
     onOpenLights: () -> Unit,
+    onOpenUpdate: () -> Unit,
 ) {
     Column(
         Modifier
@@ -151,7 +154,7 @@ fun HomeScreen(
 
         Spacer(Modifier.height(32.dp))
         SectionLabel("준비 상태")
-        ReadinessList(state.readiness, state.nowMillis, onOpenPermissions, onOpenRules, onOpenLights)
+        ReadinessList(state.readiness, state.nowMillis, onOpenPermissions, onOpenRules, onOpenLights, onOpenUpdate)
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -381,8 +384,10 @@ private fun ReadinessList(
     onOpenPermissions: () -> Unit,
     onOpenRules: () -> Unit,
     onOpenLights: () -> Unit,
+    onOpenUpdate: () -> Unit,
 ) {
     Column {
+        r.newVersion?.let { StatusLine(null, "새 버전이 있어요 · $it", "보기", onOpenUpdate) }
         // 시스템 상태 가시성: 앱이 실제로 일정을 확인했는지, 지난 알람이 어떻게 끝났는지
         r.lastCheck?.let { at ->
             if (r.lastCheckCalendarOk) {

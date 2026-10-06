@@ -19,6 +19,14 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 커밋 수로 버전 번호 계산
+
+      # 버전 번호: 폰 = 전체 커밋 수, 워치 = 워치에 들어가는 코드(wear·core)를 바꾼 커밋 수
+      - name: Version
+        run: |
+          echo "APP_VERSION_CODE=$(git rev-list --count HEAD)" >> "$GITHUB_ENV"
+          echo "WATCH_VERSION_CODE=$(git rev-list --count HEAD -- wear core gradle/libs.versions.toml)" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:
@@ -33,18 +41,35 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon :core:test :app:assembleDebug :wear:assembleDebug 2>&1 | tee build.log
 
-      # 폰·워치 APK를 'latest' 릴리스에 게시 (매 빌드마다 교체)
+      # 폰·워치 APK + version.json을 'latest' 릴리스에 게시 (매 빌드마다 교체)
+      # version.json: 앱이 자동 업데이트 확인에 사용 (버전, APK sha256, 최근 변경 내역)
       - name: Publish APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk StrongAlarm-phone.apk
           cp wear/build/outputs/apk/debug/wear-debug.apk StrongAlarm-watch.apk
+          notes="[]"
+          for c in $(git log -15 --format=%H -- . ':(exclude)*.md' ':(exclude)docs'); do
+            notes=$(jq -c --argjson v "$(git rev-list --count "$c")" --arg s "$(git log -1 --format=%s "$c")" \
+              '. + [{v: $v, s: $s}]' <<< "$notes")
+          done
+          jq -n \
+            --argjson versionCode "$APP_VERSION_CODE" \
+            --arg versionName "0.2.$APP_VERSION_CODE" \
+            --arg sha "$GITHUB_SHA" \
+            --arg phoneSha256 "$(sha256sum StrongAlarm-phone.apk | cut -d' ' -f1)" \
+            --argjson phoneSize "$(stat -c%s StrongAlarm-phone.apk)" \
+            --argjson watchVersionCode "$WATCH_VERSION_CODE" \
+            --argjson notes "$notes" \
+            '{versionCode: $versionCode, versionName: $versionName, sha: $sha, phoneSha256: $phoneSha256,
+              phoneSize: $phoneSize, watchVersionCode: $watchVersionCode, notes: $notes}' > version.json
+          cat version.json
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest StrongAlarm-phone.apk StrongAlarm-watch.apk \
+          gh release create latest StrongAlarm-phone.apk StrongAlarm-watch.apk version.json \
             --target "$GITHUB_SHA" --prerelease \
-            --title "최신 빌드 (${GITHUB_SHA::7})" \
-            --notes "main ${GITHUB_SHA::7} debug 빌드. 폰: StrongAlarm-phone.apk / 워치: StrongAlarm-watch.apk"
+            --title "0.2.$APP_VERSION_CODE (${GITHUB_SHA::7})" \
+            --notes "폰 0.2.$APP_VERSION_CODE: StrongAlarm-phone.apk / 워치 0.2.$WATCH_VERSION_CODE: StrongAlarm-watch.apk"
 
       # 화면 스크린샷 (Robolectric) — 실패해도 APK 게시에는 영향 없음
       - name: Screenshots

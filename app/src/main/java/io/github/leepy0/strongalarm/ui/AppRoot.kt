@@ -53,6 +53,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.leepy0.strongalarm.BuildConfig
 import io.github.leepy0.strongalarm.R
 import io.github.leepy0.strongalarm.alarm.AlarmScheduler
 import io.github.leepy0.strongalarm.alarm.AlarmSound
@@ -82,6 +83,7 @@ import io.github.leepy0.strongalarm.ui.home.NextAlarm
 import io.github.leepy0.strongalarm.ui.home.Readiness
 import io.github.leepy0.strongalarm.ui.rules.RulesScreen
 import io.github.leepy0.strongalarm.ui.rules.RulesUiState
+import io.github.leepy0.strongalarm.ui.settings.AppVersionUi
 import io.github.leepy0.strongalarm.ui.settings.HistoryScreen
 import io.github.leepy0.strongalarm.ui.settings.LightTestState
 import io.github.leepy0.strongalarm.ui.settings.LightsScreen
@@ -91,6 +93,7 @@ import io.github.leepy0.strongalarm.ui.settings.PermissionsScreen
 import io.github.leepy0.strongalarm.ui.settings.SettingsScreen
 import io.github.leepy0.strongalarm.ui.settings.SettingsUiState
 import io.github.leepy0.strongalarm.ui.theme.Palette
+import io.github.leepy0.strongalarm.update.Updater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -133,7 +136,12 @@ private fun DayOffRule.keywordCount() =
  * 저장소와 화면을 연결하고, 되돌릴 수 있는 삭제는 스낵바 '되돌리기'로 처리
  */
 @Composable
-fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
+fun AppRoot(
+    overrideRequest: LocalDate?,
+    onOverrideHandled: () -> Unit,
+    openUpdate: Boolean = false,
+    onOpenUpdateHandled: () -> Unit = {},
+) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -181,6 +189,23 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
         val runtime = runtimePermissionOf(key)
         if (runtime != null) launcher.launch(arrayOf(runtime)) else openPermissionSettings(ctx, key)
     }
+
+    // ── 새 버전: 화면에 돌아올 때 10분 이상 지났으면 확인 ──
+    val updateState by Updater.state.collectAsStateWithLifecycle()
+    LaunchedEffect(tick) {
+        val last = Stores.state.get(ctx).updateCheckedAt ?: 0L
+        if (Updater.state.value == Updater.State.Idle || System.currentTimeMillis() - last > 10 * 60_000L) {
+            Updater.check(ctx)
+        }
+    }
+    LaunchedEffect(openUpdate) {
+        if (openUpdate) {
+            sub = null
+            tab = Tab.SETTINGS
+            onOpenUpdateHandled()
+        }
+    }
+    val newRemote = (updateState as? Updater.State.Available)?.remote
 
     // ── 현재 시각: 남은 시간 표시용, 분이 바뀔 때마다 갱신 ──
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -295,6 +320,13 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
         }
         AlarmScheduler.scheduleTest(ctx, 10_000)
         notify("10초 뒤 울려요. 화면을 꺼두고 기다려보세요.")
+    }
+
+    /** 브라우저로 APK 다운로드 → 다운로드 알림에서 시스템 설치 */
+    fun download(url: String) {
+        runCatching { ctx.startActivity(Updater.downloadIntent(url)) }
+            .onSuccess { notify("다운로드가 끝나면 알림을 눌러 설치해주세요") }
+            .onFailure { notify("브라우저를 열 수 없어요") }
     }
 
     /** 알람 소리 미리 듣기 (4초). 다시 누르면 멈춤. 끝나면 원래 볼륨 복구 */
@@ -492,6 +524,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                                         lastResult = appState.lastResult,
                                         lastResultAt = appState.lastResultAt,
                                         lightsAuthError = appState.lightsAuthError,
+                                        newVersion = newRemote?.versionName,
                                     ),
                                     nowMillis = nowMillis,
                                 ),
@@ -501,6 +534,7 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                                 onOpenPermissions = { sub = Sub.PERMISSIONS },
                                 onOpenRules = { tab = Tab.RULES },
                                 onOpenLights = { sub = Sub.LIGHTS },
+                                onOpenUpdate = { tab = Tab.SETTINGS },
                             )
                         }
 
@@ -522,6 +556,19 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                                 stepGoal = settings.stepGoal,
                                 alarmVolume = settings.alarmVolume,
                                 previewing = previewSound != null,
+                                app = AppVersionUi(
+                                    installed = remember { Updater.installedVersionName(ctx) },
+                                    newVersion = newRemote?.versionName,
+                                    notes = newRemote?.let { r -> Updater.notesSince(ctx, r).map { it.s } }.orEmpty(),
+                                    status = when (val u = updateState) {
+                                        is Updater.State.Failed -> u.message
+                                        else -> appState.updateCheckedAt
+                                            ?.let { "최신이에요 · ${agoKo(it, nowMillis)} 확인" }
+                                            ?: "아직 확인 안 함"
+                                    },
+                                    checking = updateState == Updater.State.Checking,
+                                    watchChanged = (newRemote?.watchVersionCode ?: 0) > BuildConfig.WATCH_VERSION_CODE,
+                                ),
                                 lightsSummary = when {
                                     !loggedIn -> null
                                     appState.lightsAuthError -> "다시 로그인 필요"
@@ -541,6 +588,9 @@ fun AppRoot(overrideRequest: LocalDate?, onOverrideHandled: () -> Unit) {
                             onOpenPermissions = { sub = Sub.PERMISSIONS },
                             onTestAlarm = ::testAlarm,
                             onOpenHistory = { sub = Sub.HISTORY },
+                            onCheckUpdate = { scope.launch { Updater.check(ctx, silent = false) } },
+                            onDownloadPhone = { download(Updater.PHONE_APK_URL) },
+                            onDownloadWatch = { download(Updater.WATCH_APK_URL) },
                         )
                     }
                 }

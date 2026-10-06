@@ -18,9 +18,13 @@ class MainActivity : ComponentActivity() {
     companion object {
         /** 23시 안내 알림의 [시각 변경] → 해당 날짜 시각 선택 */
         const val EXTRA_OVERRIDE_DATE = "override_date"
+
+        /** 새 버전 알림 → 설정 탭 */
+        const val EXTRA_OPEN_UPDATE = "open_update"
     }
 
     private val overrideRequest = mutableStateOf<LocalDate?>(null)
+    private val openUpdate = mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,6 +36,8 @@ class MainActivity : ComponentActivity() {
                 AppRoot(
                     overrideRequest = overrideRequest.value,
                     onOverrideHandled = { overrideRequest.value = null },
+                    openUpdate = openUpdate.value,
+                    onOpenUpdateHandled = { openUpdate.value = false },
                 )
             }
         }
@@ -44,6 +50,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_UPDATE, false) == true) openUpdate.value = true
         intent?.getStringExtra(EXTRA_OVERRIDE_DATE)?.let {
             overrideRequest.value = runCatching { LocalDate.parse(it) }.getOrNull()
         }

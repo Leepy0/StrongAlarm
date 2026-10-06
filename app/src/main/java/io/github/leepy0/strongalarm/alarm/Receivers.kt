@@ -7,6 +7,7 @@ import io.github.leepy0.strongalarm.data.HistoryLog
 import io.github.leepy0.strongalarm.data.Phase
 import io.github.leepy0.strongalarm.data.Stores
 import io.github.leepy0.strongalarm.lights.LightController
+import io.github.leepy0.strongalarm.update.Updater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -58,6 +59,10 @@ class BootReceiver : BroadcastReceiver() {
             // 자동 소등 대기 중 재부팅된 경우 1분 뒤 소등
             if (Stores.state.get(ctx).session?.phase == Phase.DONE) {
                 AlarmScheduler.scheduleLightsOff(ctx, System.currentTimeMillis() + 60_000)
+            }
+            if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+                ctx.getSystemService(android.app.NotificationManager::class.java).cancel(Notifications.ID_UPDATE)
+                HistoryLog.add(ctx, "업데이트 완료 → ${Updater.installedVersionName(ctx)}")
             }
             HistoryLog.add(ctx, "재등록 (${intent.action?.substringAfterLast('.')})")
         }

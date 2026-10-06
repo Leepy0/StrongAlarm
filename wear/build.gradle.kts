@@ -14,8 +14,10 @@ android {
         applicationId = "io.github.leepy0.strongalarm"
         minSdk = 33
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI가 워치 관련 파일(wear·core) 커밋 수로 버전을 넘겨줌. 로컬 빌드는 1
+        val watchVersion = System.getenv("WATCH_VERSION_CODE")?.toIntOrNull() ?: 1
+        versionCode = watchVersion
+        versionName = "0.2.$watchVersion"
     }
 
     signingConfigs {
