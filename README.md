@@ -11,8 +11,7 @@
 
 ## 상태
 
-v0.1 초기 구현. **아직 실기기 빌드·실행 검증 전**이다.
-`core` 모듈(휴무 판정·스케줄 계산)은 단위 테스트 27개 통과, `app`/`wear`는 Android Studio에서 첫 빌드 시 컴파일 오류가 있을 수 있다.
+v0.1 초기 구현. CI 빌드·단위 테스트(27개) 통과, **실기기 동작 검증 전**.
 
 ## 구조
 
@@ -24,8 +23,13 @@ wear/  워치 앱 (minSdk 33)
 
 ## 빌드 & 설치
 
+**CI 빌드**: main에 push하면 GitHub Actions가 빌드해 [`latest` 릴리스](../../releases/tag/latest)에
+`StrongAlarm-phone.apk` / `StrongAlarm-watch.apk`를 올린다. 빌드 로그는 `ci-log` 릴리스.
+
+**로컬 빌드**
 1. Android Studio로 열기 (Gradle 8.14.3, AGP 8.11.1, Kotlin 2.2.0 — 최신 버전 업그레이드 제안이 뜨면 적용해도 됨)
-2. **폰 앱과 워치 앱은 같은 PC에서 빌드**해야 한다. 서명(debug 키)과 applicationId가 같아야 폰↔워치 메시지가 전달됨
+2. 서명은 `keystore/debug.keystore`(debug 전용) 고정 → 로컬·CI 빌드를 섞어 설치해도 업데이트 설치 가능.
+   폰↔워치 메시지는 두 APK의 applicationId·서명이 같아야 전달됨
 3. 설치
    ```bash
    ./gradlew :app:installDebug                 # 폰 (USB 또는 무선 디버깅)
