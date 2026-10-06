@@ -1,6 +1,5 @@
 package io.github.leepy0.strongalarm.wear
 
-import android.Manifest
 import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
@@ -9,12 +8,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -36,7 +30,7 @@ import kotlinx.coroutines.launch
  * 워치 알람: 진동 + 걸음 수를 폰으로 전송.
  * 폰의 STOP 수신, 목표 걸음 달성, 60분 경과 중 하나로 종료
  */
-class WatchAlarmService : Service(), SensorEventListener {
+class WatchAlarmService : Service() {
 
     companion object {
         private const val TAG = "WatchAlarmService"
@@ -85,14 +79,12 @@ class WatchAlarmService : Service(), SensorEventListener {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val vibrator by lazy { getSystemService(VibratorManager::class.java).defaultVibrator }
-    private val sensorManager by lazy { getSystemService(SensorManager::class.java) }
     private var wakeLock: PowerManager.WakeLock? = null
     private var timeoutJob: Job? = null
     private var nodeId: String? = null
     private var goal = 30
     private var steps = 0
-    private var counterBase = -1f
-    private var useCounter = false
+    private var tracker: WatchStepTracker? = null
     private var running = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -128,7 +120,6 @@ class WatchAlarmService : Service(), SensorEventListener {
     private fun begin() {
         running = true
         steps = 0
-        counterBase = -1f
         wakeLock = getSystemService(PowerManager::class.java)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "StrongAlarm:watch")
             .apply { acquire(MAX_RUN_MS + 60_000L) }
@@ -149,36 +140,30 @@ class WatchAlarmService : Service(), SensorEventListener {
     }
 
     private fun startSteps() {
-        if (checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) {
-            Log.w(TAG, "신체 활동 권한 없음")
-            return
+        val t = WatchStepTracker(this) { n -> onSteps(n) }
+        tracker = t
+        val ok = t.start()
+        if (!ok) {
+            Log.w(TAG, "걸음 센서 사용 불가: ${t.description}")
+            WatchState.update { it.copy(sensorProblem = t.description) }
         }
-        val detector = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
-        val sensor = detector ?: sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER) ?: return
-        useCounter = detector == null
-        sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_FASTEST)
+        // 폰에 시작 확인 + 센서 상태 전송 (폰 기록에 남겨 원인 파악용)
+        send(WearProtocol.WATCH_STATUS, WearProtocol.encodeText((if (ok) "ok:" else "fail:") + t.description))
     }
 
-    override fun onSensorChanged(e: SensorEvent) {
-        if (!running) return
-        if (useCounter) {
-            if (counterBase < 0) counterBase = e.values[0]
-            steps = (e.values[0] - counterBase).toInt()
-        } else {
-            steps++
-        }
+    private fun onSteps(n: Int) {
+        if (!running || n == steps) return
+        steps = n
         WatchState.update { it.copy(steps = steps) }
-        sendSteps()
+        send(WearProtocol.STEPS, WearProtocol.encodeInt(steps))
         if (steps >= goal) finish()
     }
 
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
-
-    private fun sendSteps() {
+    private fun send(path: String, payload: ByteArray) {
         val node = nodeId ?: return
         Wearable.getMessageClient(this)
-            .sendMessage(node, WearProtocol.STEPS, WearProtocol.encodeInt(steps))
-            .addOnFailureListener { Log.w(TAG, "걸음 전송 실패", it) }
+            .sendMessage(node, path, payload)
+            .addOnFailureListener { Log.w(TAG, "전송 실패 $path", it) }
     }
 
     private fun finish() {
@@ -191,7 +176,8 @@ class WatchAlarmService : Service(), SensorEventListener {
         running = false
         timeoutJob?.cancel()
         runCatching { vibrator.cancel() }
-        sensorManager.unregisterListener(this)
+        tracker?.stop()
+        tracker = null
         wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
         WatchState.update { WatchState.State() }

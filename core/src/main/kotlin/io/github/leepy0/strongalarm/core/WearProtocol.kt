@@ -17,6 +17,11 @@ object WearProtocol {
     /** 워치 → 폰: 울림 시작 이후 누적 걸음 수 (UTF-8 정수) */
     const val STEPS = "$PREFIX/steps"
 
+    /** 워치 → 폰: 워치 알람 시작 확인 + 걸음 센서 상태 (UTF-8 문장). 예: "ok:감지기(wake)+카운터", "fail:신체 활동 권한 없음" */
+    const val WATCH_STATUS = "$PREFIX/watch_status"
+
     fun encodeInt(v: Int): ByteArray = v.toString().toByteArray(Charsets.UTF_8)
     fun decodeInt(b: ByteArray?): Int? = b?.toString(Charsets.UTF_8)?.trim()?.toIntOrNull()
+    fun encodeText(v: String): ByteArray = v.toByteArray(Charsets.UTF_8)
+    fun decodeText(b: ByteArray?): String? = b?.toString(Charsets.UTF_8)
 }

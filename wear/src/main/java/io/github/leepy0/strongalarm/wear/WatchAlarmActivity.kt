@@ -41,6 +41,9 @@ class WatchAlarmActivity : ComponentActivity() {
                     }
                     text.text = if (s.paused) {
                         "휴무 버튼\n누르는 중"
+                    } else if (s.sensorProblem != null) {
+                        // 워치로는 못 셈 → 폰을 들고 걸어야 함
+                        "기상 미션\n\n${s.sensorProblem}\n폰을 들고 걸어주세요"
                     } else {
                         "기상 미션\n\n${s.steps} / ${s.goal}\n걸음"
                     }

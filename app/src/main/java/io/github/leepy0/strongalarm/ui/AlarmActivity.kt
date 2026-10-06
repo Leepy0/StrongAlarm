@@ -72,6 +72,10 @@ private fun AlarmRoute(onFinish: () -> Unit) {
             watchNodes = ui.watchNodes,
             goal = ui.goal,
             paused = ui.phase == UiPhase.PAUSED,
+            sensorNote = listOfNotNull(
+                ui.phoneSensorProblem?.let { "폰: $it" },
+                ui.watchSensorProblem?.let { "워치: $it" },
+            ).joinToString("\n").ifEmpty { null },
         ),
         onPress = { AlarmService.control(ctx, AlarmService.ACTION_PAUSE) },
         onCancel = { AlarmService.control(ctx, AlarmService.ACTION_RESUME) },

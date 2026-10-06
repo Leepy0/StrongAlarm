@@ -89,6 +89,8 @@ class AlarmService : Service() {
     private val ringJobs = mutableListOf<Job>()
     private var watchListener: MessageClient.OnMessageReceivedListener? = null
     private var ringStartedAt = 0L
+    /** 워치가 알람 시작 확인(WATCH_STATUS)을 보냈는지 */
+    private var watchAcked = false
     private var test = false
     private var goal = 30
 
@@ -247,9 +249,21 @@ class AlarmService : Service() {
         }
         startVibration()
         stepTracker = StepTracker(this) { n -> onPhoneSteps(n) }.also {
-            if (!it.start()) log("폰 걸음 센서 사용 불가 (권한 확인)")
+            if (it.start()) {
+                log("폰 걸음 센서: ${it.description}")
+            } else {
+                log("폰 걸음 센서 사용 불가: ${it.description}")
+                AlarmSession.update { s -> s.copy(phoneSensorProblem = it.description) }
+            }
         }
+        watchAcked = false
         registerWatch()
+
+        // 1분이 지나도 걸음이 0이면 원인 파악용 기록
+        ringJobs += scope.launch {
+            delay(60_000)
+            if (AlarmSession.state.value.steps == 0) log("1분째 걸음 0 — ${stepDiagnosis()}")
+        }
 
         // 5분마다 볼륨 상향, 종료 없음
         ringJobs += scope.launch {
@@ -286,8 +300,9 @@ class AlarmService : Service() {
 
     private fun registerWatch() {
         val listener = MessageClient.OnMessageReceivedListener { ev ->
-            if (ev.path == WearProtocol.STEPS) {
-                WearProtocol.decodeInt(ev.data)?.let { n -> scope.launch { onWatchSteps(n) } }
+            when (ev.path) {
+                WearProtocol.STEPS -> WearProtocol.decodeInt(ev.data)?.let { n -> scope.launch { onWatchSteps(n) } }
+                WearProtocol.WATCH_STATUS -> WearProtocol.decodeText(ev.data)?.let { t -> scope.launch { onWatchStatus(t) } }
             }
         }
         watchListener = listener
@@ -302,6 +317,38 @@ class AlarmService : Service() {
     private fun onPhoneSteps(n: Int) {
         AlarmSession.update { it.copy(phoneSteps = n) }
         checkGoal()
+    }
+
+    /** 워치 알람 시작 확인. "ok:감지기(wake)+카운터" / "fail:신체 활동 권한 없음" */
+    private fun onWatchStatus(text: String) {
+        watchAcked = true
+        val ok = text.startsWith("ok:")
+        val detail = text.substringAfter(':')
+        if (ok) {
+            log("워치 알람 시작 — 걸음 센서: $detail")
+        } else {
+            log("워치 걸음 센서 사용 불가: $detail")
+            AlarmSession.update { it.copy(watchSensorProblem = detail) }
+        }
+    }
+
+    /** 걸음이 안 올라갈 때 원인 후보를 한 줄로 */
+    private fun stepDiagnosis(): String {
+        val ui = AlarmSession.state.value
+        val t = stepTracker
+        val phone = when {
+            t == null -> "폰 센서 없음"
+            ui.phoneSensorProblem != null -> "폰 ${ui.phoneSensorProblem}"
+            t.firstEventAt == null -> "폰 센서(${t.description}) 이벤트 없음"
+            else -> "폰 감지기 ${t.detectorSteps}·카운터 ${t.counterSteps}"
+        }
+        val watch = when {
+            ui.watchNodes == 0 -> "워치 미연결"
+            !watchAcked -> "워치 응답 없음(워치 앱 실행·알림 권한 확인)"
+            ui.watchSensorProblem != null -> "워치 ${ui.watchSensorProblem}"
+            else -> "워치 ${ui.watchSteps}걸음 수신"
+        }
+        return "$phone, $watch"
     }
 
     private fun onWatchSteps(n: Int) {
@@ -345,7 +392,9 @@ class AlarmService : Service() {
     private fun dismiss(byHoliday: Boolean) {
         if (mode == Mode.FINISHING) return
         mode = Mode.FINISHING
-        val steps = AlarmSession.state.value.steps
+        val ui = AlarmSession.state.value
+        val steps = ui.steps
+        val breakdown = "폰 ${ui.phoneSteps} · 워치 ${ui.watchSteps}"
         val test = this.test
         stopRinging()
 
@@ -378,7 +427,7 @@ class AlarmService : Service() {
                 }
                 val suffix = if (test) " (테스트)" else ""
                 val result = if (byHoliday) "쉬는 날 버튼으로 끔" else "${steps}걸음 걸어서 끔"
-                HistoryLog.add(ctx, (if (byHoliday) "휴무 버튼으로 종료" else "기상 확인 — 걸음 $steps/$goal") + suffix)
+                HistoryLog.add(ctx, (if (byHoliday) "휴무 버튼으로 종료 ($breakdown)" else "기상 확인 — 걸음 $steps/$goal ($breakdown)") + suffix)
                 Stores.state.update(ctx) { it.copy(lastResult = result + suffix, lastResultAt = System.currentTimeMillis()) }
                 AlarmScheduler.rescheduleAll(ctx)
             }

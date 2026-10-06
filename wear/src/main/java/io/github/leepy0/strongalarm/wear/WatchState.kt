@@ -11,6 +11,8 @@ object WatchState {
         val paused: Boolean = false,
         val steps: Int = 0,
         val goal: Int = 30,
+        /** 걸음 센서를 못 쓰는 이유. null = 정상 */
+        val sensorProblem: String? = null,
     )
 
     private val _state = MutableStateFlow(State())

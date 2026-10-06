@@ -54,6 +54,8 @@ data class AlarmUiState(
     val watchNodes: Int,
     val goal: Int,
     val paused: Boolean,
+    /** 걸음 센서 문제 안내 (예: "워치: 신체 활동 권한 없음"). null = 정상 */
+    val sensorNote: String? = null,
 ) {
     val steps get() = maxOf(phoneSteps, watchSteps)
 }
@@ -98,6 +100,15 @@ fun AlarmScreen(state: AlarmUiState, onPress: () -> Unit, onCancel: () -> Unit, 
                 color = Palette.Mist,
                 textAlign = TextAlign.Center,
             )
+            state.sensorNote?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Palette.Ember,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
             Gap(tall, 48)
             HoldToRest(state.paused, onPress, onCancel, onComplete)
         }

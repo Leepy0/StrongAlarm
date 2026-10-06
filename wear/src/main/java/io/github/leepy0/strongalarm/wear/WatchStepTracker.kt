@@ -1,4 +1,4 @@
-package io.github.leepy0.strongalarm.alarm
+package io.github.leepy0.strongalarm.wear
 
 import android.Manifest
 import android.content.Context
@@ -16,9 +16,9 @@ import io.github.leepy0.strongalarm.core.StepFusion
  * - STEP_DETECTOR와 STEP_COUNTER를 둘 다 등록하고 큰 값 사용 (삼성 기기는 한쪽이 늦거나 멈추는 경우가 있음)
  * - wake-up 센서가 있으면 우선 사용: 화면이 꺼져도 센서 허브에 묶이지 않고 바로 전달
  * - 2초마다 flush: 센서 허브 FIFO에 쌓인 걸음을 강제로 꺼냄
- * ※ 워치 모듈 WatchStepTracker와 같은 로직
+ * ※ 폰 모듈 StepTracker와 같은 로직
  */
-class StepTracker(ctx: Context, private val onSteps: (Int) -> Unit) : SensorEventListener {
+class WatchStepTracker(ctx: Context, private val onSteps: (Int) -> Unit) : SensorEventListener {
     private val appCtx = ctx.applicationContext
     private val sm = ctx.getSystemService(SensorManager::class.java)
     private val fusion = StepFusion()
@@ -39,7 +39,7 @@ class StepTracker(ctx: Context, private val onSteps: (Int) -> Unit) : SensorEven
     private val flushTick = object : Runnable {
         override fun run() {
             if (!running) return
-            sm.flush(this@StepTracker)
+            sm.flush(this@WatchStepTracker)
             handler.postDelayed(this, FLUSH_MS)
         }
     }

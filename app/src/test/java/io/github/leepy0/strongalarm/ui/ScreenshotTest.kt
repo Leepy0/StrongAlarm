@@ -218,6 +218,13 @@ class ScreenshotTest {
         AlarmScreen(AlarmUiState(LocalTime.of(7, 1), "평일이에요", false, 3, 18, 1, 30, false), {}, {}, {})
     }
 
+    @Test fun alarmSensorProblem() = shot("17_alarm_sensor_problem") {
+        AlarmScreen(
+            AlarmUiState(LocalTime.of(7, 1), "평일이에요", false, 4, 0, 1, 30, false, sensorNote = "워치: 신체 활동 권한 없음"),
+            {}, {}, {},
+        )
+    }
+
     @Test fun alarmPaused() = shot("12_alarm_paused") {
         AlarmScreen(AlarmUiState(LocalTime.of(7, 1), "평일이에요", false, 0, 0, 0, 30, true), {}, {}, {})
     }
