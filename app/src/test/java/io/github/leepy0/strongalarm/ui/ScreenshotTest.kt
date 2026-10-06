@@ -230,6 +230,7 @@ class ScreenshotTest {
         )
     }
 
+    @Config(qualifiers = "w384dp-h1500dp-xxhdpi")
     @Test fun settingsUpdate() = shot("18_settings_update") {
         SettingsScreen(
             SettingsUiState(
