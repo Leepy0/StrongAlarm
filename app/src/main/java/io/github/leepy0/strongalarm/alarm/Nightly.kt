@@ -2,6 +2,7 @@ package io.github.leepy0.strongalarm.alarm
 
 import android.content.Context
 import io.github.leepy0.strongalarm.data.HistoryLog
+import io.github.leepy0.strongalarm.data.Stores
 import io.github.leepy0.strongalarm.lights.SmartThingsAuth
 import java.time.LocalDateTime
 
@@ -11,6 +12,7 @@ object Nightly {
         val now = LocalDateTime.now()
         val target = if (now.hour >= 12) now.toLocalDate().plusDays(1) else now.toLocalDate()
 
+        Stores.state.update(ctx) { it.copy(lastNightlyAt = System.currentTimeMillis()) }
         AlarmScheduler.rescheduleAll(ctx)
         val j = AlarmScheduler.judge(ctx, target)
         Notifications.showNightly(ctx, j)

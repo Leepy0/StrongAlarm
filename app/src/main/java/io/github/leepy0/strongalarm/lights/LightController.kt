@@ -33,25 +33,26 @@ object LightController {
         ids.map { async { SmartThingsClient.on(ctx, it) } }.awaitAll()
     }
 
-    /** 알람 전 상태로 복구: 앱이 켠 조명은 끄고, 원래 켜져 있던 조명은 밝기만 되돌림 */
+    /**
+     * 알람 전 상태로 복구: 앱이 켠 조명은 끄고, 원래 켜져 있던 조명은 밝기만 되돌림.
+     * 알람 전 상태를 못 읽은 조명(on == null)은 앱이 건드리지 않았으므로 그대로 둠
+     */
     suspend fun restore(ctx: Context, s: SessionState, label: String = "조명 복구") = coroutineScope {
         val l = Stores.settings.get(ctx).lights
         val jobs = mutableListOf<kotlinx.coroutines.Deferred<Boolean>>()
         if (s.dimmersTouched) {
             l.dimmerIds.forEach { id ->
                 val snap = s.snapshot[id]
-                jobs += async {
-                    if (snap?.on == true) {
-                        // 원래 켜져 있던 조명은 밝기만 되돌림
-                        snap.level?.let { SmartThingsClient.setLevel(ctx, id, it, turnOn = true) } ?: true
-                    } else {
-                        SmartThingsClient.off(ctx, id)
-                    }
+                when (snap?.on) {
+                    // 원래 켜져 있던 조명은 밝기만 되돌림
+                    true -> jobs += async { snap.level?.let { SmartThingsClient.setLevel(ctx, id, it, turnOn = true) } ?: true }
+                    false -> jobs += async { SmartThingsClient.off(ctx, id) }
+                    null -> Unit
                 }
             }
         }
         if (s.switchesTouched) {
-            l.switchIds.filter { it !in l.dimmerIds && s.snapshot[it]?.on != true }
+            l.switchIds.filter { it !in l.dimmerIds && s.snapshot[it]?.on == false }
                 .forEach { id -> jobs += async { SmartThingsClient.off(ctx, id) } }
         }
         if (jobs.isEmpty()) return@coroutineScope

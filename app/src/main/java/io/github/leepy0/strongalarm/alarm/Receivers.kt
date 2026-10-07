@@ -3,6 +3,8 @@ package io.github.leepy0.strongalarm.alarm
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
+import io.github.leepy0.strongalarm.core.WearProtocol
 import io.github.leepy0.strongalarm.data.HistoryLog
 import io.github.leepy0.strongalarm.data.Phase
 import io.github.leepy0.strongalarm.data.Stores
@@ -36,7 +38,7 @@ class AlarmReceiver : BroadcastReceiver() {
             AlarmScheduler.ACTION_PRE,
             AlarmScheduler.ACTION_RING,
             AlarmScheduler.ACTION_TEST,
-            -> AlarmService.start(ctx, intent.action!!, date)
+            -> AlarmService.start(ctx, intent.action!!, date, intent.getIntExtra(AlarmScheduler.EXTRA_RETRY, 0))
 
             AlarmScheduler.ACTION_NIGHTLY -> goAsyncWork { Nightly.run(ctx) }
 
@@ -54,6 +56,10 @@ class AlarmReceiver : BroadcastReceiver() {
             // 23시 안내 [울림 확인]: 그날 알람은 쉬는 날 버튼 잠금
             AlarmScheduler.ACTION_CONFIRM -> goAsyncWork {
                 val d = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@goAsyncWork
+                if (!stillPending(ctx, d)) {
+                    HistoryLog.add(ctx, "울림 확인 무시: $d 알람이 이미 지남")
+                    return@goAsyncWork
+                }
                 Stores.settings.update(ctx) { it.withConfirm(d) }
                 HistoryLog.add(ctx, "울림 확인: $d (쉬는 날 버튼 잠금)")
                 Notifications.showNightly(ctx, AlarmScheduler.judge(ctx, d))
@@ -62,8 +68,8 @@ class AlarmReceiver : BroadcastReceiver() {
             // 23시 안내 [쉬는 날로]. 알람이 진행 중인 날짜면 무시
             AlarmScheduler.ACTION_SKIP -> goAsyncWork {
                 val d = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@goAsyncWork
-                if (Stores.state.get(ctx).dayLocked(d)) {
-                    HistoryLog.add(ctx, "쉬는 날 지정 무시: $d 알람 진행 중")
+                if (Stores.state.get(ctx).dayLocked(d) || !stillPending(ctx, d)) {
+                    HistoryLog.add(ctx, "쉬는 날 지정 무시: $d 알람 진행 중이거나 이미 지남")
                     return@goAsyncWork
                 }
                 Stores.settings.update(ctx) { it.withSkip(d) }
@@ -75,9 +81,22 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 }
 
+/**
+ * 오래된 23시 안내의 버튼 방지: 지난 날짜, 또는 오늘인데 오늘 알람이 이미 끝난 경우 무시
+ * (오늘 알람이 아직 남아 있으면 next가 오늘 날짜)
+ */
+private fun stillPending(ctx: Context, d: LocalDate): Boolean {
+    val today = LocalDate.now()
+    if (d.isBefore(today)) return false
+    if (d == today) return Stores.state.get(ctx).next?.date == today.toString()
+    return true
+}
+
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         goAsyncWork {
+            val boot = intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_LOCKED_BOOT_COMPLETED
+            if (boot) endSessionByReboot(ctx, intent.action == Intent.ACTION_BOOT_COMPLETED)
             AlarmScheduler.rescheduleAll(ctx)
             // 자동 소등 대기 중 재부팅된 경우 1분 뒤 소등
             if (Stores.state.get(ctx).session?.phase == Phase.DONE) {
@@ -94,6 +113,37 @@ class BootReceiver : BroadcastReceiver() {
                 }
             }
             HistoryLog.add(ctx, "재등록 (${intent.action?.substringAfterLast('.')})")
+        }
+    }
+}
+
+/**
+ * 울림·디밍 중 재부팅 = 알람 종료로 처리 (사용자 결정).
+ * 원래 볼륨 복구, 조명은 자동 소등 대기(1분 뒤), 워치 진동 중지
+ * @param unlocked 잠금 해제 후 부팅 완료 (워치 메시지는 이때 다시 보냄)
+ */
+private suspend fun endSessionByReboot(ctx: Context, unlocked: Boolean) {
+    val sess = Stores.state.get(ctx).session
+    val now = System.currentTimeMillis()
+    if (sess != null && (sess.phase == Phase.RINGING || sess.phase == Phase.DIMMING)) {
+        sess.originalAlarmVolume?.let { v ->
+            runCatching { ctx.getSystemService(AudioManager::class.java).setStreamVolume(AudioManager.STREAM_ALARM, v, 0) }
+        }
+        val touched = sess.dimmersTouched || sess.switchesTouched
+        Stores.state.update(ctx) {
+            it.copy(
+                session = if (touched) sess.copy(phase = Phase.DONE) else null,
+                lastResult = "재부팅으로 꺼짐",
+                lastResultAt = now,
+            )
+        }
+        HistoryLog.add(ctx, "재부팅으로 알람 종료 (${sess.date})")
+        WatchLink.send(ctx, WearProtocol.STOP)
+    } else if (unlocked) {
+        // 잠금 상태 부팅 때는 Play 서비스가 없어 워치에 못 보냈을 수 있으니 한 번 더
+        val st = Stores.state.get(ctx)
+        if (st.lastResult == "재부팅으로 꺼짐" && now - (st.lastResultAt ?: 0) < 10 * 60_000L) {
+            WatchLink.send(ctx, WearProtocol.STOP)
         }
     }
 }

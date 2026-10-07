@@ -101,7 +101,16 @@ class SmartThingsLoginActivity : ComponentActivity() {
                         }
                     }
                     Box(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding()) {
-                        AndroidView(factory = { createWebView() }, modifier = Modifier.fillMaxSize())
+                        // 화면에서 떼어낸 뒤 해제 (붙은 채로 destroy하면 일부 WebView에서 크래시)
+                        AndroidView(
+                            factory = { createWebView() },
+                            modifier = Modifier.fillMaxSize(),
+                            onRelease = { view ->
+                                view.stopLoading()
+                                view.destroy()
+                                if (web === view) web = null
+                            },
+                        )
                         when {
                             error != null -> ErrorPanel(error!!)
                             finishing -> Finishing()
@@ -214,7 +223,7 @@ class SmartThingsLoginActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        web?.destroy()
+        // WebView 해제는 AndroidView onRelease에서 (Compose가 뷰를 떼어낸 뒤)
         web = null
         super.onDestroy()
     }

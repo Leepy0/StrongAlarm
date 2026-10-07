@@ -13,7 +13,7 @@ import io.github.leepy0.strongalarm.data.Stores
 import io.github.leepy0.strongalarm.ui.AlarmActivity
 import io.github.leepy0.strongalarm.ui.MainActivity
 import io.github.leepy0.strongalarm.ui.pretty
-import io.github.leepy0.strongalarm.update.ApkDownloadReceiver
+import io.github.leepy0.strongalarm.update.UpdateActionReceiver
 
 object Notifications {
     const val CH_RING = "alarm_ring"
@@ -153,7 +153,7 @@ object Notifications {
         )
         val download = PendingIntent.getBroadcast(
             ctx, 32,
-            Intent(ctx, ApkDownloadReceiver::class.java).setAction(ApkDownloadReceiver.ACTION_START),
+            Intent(ctx, UpdateActionReceiver::class.java).setAction(UpdateActionReceiver.ACTION_START),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val n = Notification.Builder(ctx, CH_UPDATE)

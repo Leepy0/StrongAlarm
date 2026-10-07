@@ -30,12 +30,14 @@ object AlarmScheduler {
     const val ACTION_CONFIRM = "$PKG.CONFIRM"
     const val ACTION_SKIP = "$PKG.SKIP"
     const val EXTRA_DATE = "date"
+    const val EXTRA_RETRY = "retry"
 
     private const val REQ_RING = 1
     private const val REQ_PRE = 2
     private const val REQ_NIGHTLY = 3
     private const val REQ_LIGHTS_OFF = 4
     private const val REQ_TEST = 5
+    private const val REQ_RETRY = 6
 
     private const val PLAN_DAYS = 62
 
@@ -150,6 +152,18 @@ object AlarmScheduler {
 
     fun scheduleLightsOff(ctx: Context, atMillis: Long) =
         exact(ctx, atMillis, pending(ctx, ACTION_LIGHTS_OFF, REQ_LIGHTS_OFF, null))
+
+    /** 울림 서비스 시작 실패 시 1분 뒤 재시도 */
+    fun scheduleRingRetry(ctx: Context, date: String?, retry: Int) {
+        val pi = PendingIntent.getBroadcast(
+            ctx, REQ_RETRY,
+            Intent(ctx, AlarmReceiver::class.java).setAction(ACTION_RING)
+                .putExtra(EXTRA_DATE, date)
+                .putExtra(EXTRA_RETRY, retry),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        exact(ctx, System.currentTimeMillis() + 60_000, pi)
+    }
 
     fun scheduleTest(ctx: Context, delayMs: Long) =
         exact(ctx, System.currentTimeMillis() + delayMs, pending(ctx, ACTION_TEST, REQ_TEST, LocalDate.now()))

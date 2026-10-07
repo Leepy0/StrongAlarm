@@ -70,7 +70,8 @@ data class AppSettings(
     }
 
     fun withoutSkip(date: LocalDate) = copy(skips = skips - date.toString())
-    fun withConfirm(date: LocalDate) = copy(confirmed = confirmed + date.toString())
+    /** 울림 확인. 쉬는 날 지정과 겹치지 않게 지정 해제 */
+    fun withConfirm(date: LocalDate) = copy(confirmed = confirmed + date.toString(), skips = skips - date.toString())
     fun withoutConfirm(date: LocalDate) = copy(confirmed = confirmed - date.toString())
 
     /** 되돌리기: 그 날짜의 지정 상태만 이전 값으로 (다른 날짜·설정은 유지) */
@@ -113,6 +114,8 @@ data class SessionState(
     val dimmersTouched: Boolean = false,
     val switchesTouched: Boolean = false,
     val test: Boolean = false,
+    /** 울림 전 알람 볼륨 (프로세스 재시작·재부팅 후에도 원래 값으로 복구) */
+    val originalAlarmVolume: Int? = null,
 )
 
 @Serializable
@@ -130,7 +133,9 @@ data class AppState(
     val lastResultAt: Long? = null,
     /** SmartThings 토큰 갱신이 거부됨 → 재로그인 필요 */
     val lightsAuthError: Boolean = false,
-    /** 마지막 업데이트 확인 시각 */
+    /** 마지막으로 23시 안내(Nightly)가 실행된 시각. 하루 넘게 멈추면 백그라운드 실행이 막힌 것 */
+    val lastNightlyAt: Long? = null,
+    /** 마지막 업데이트 확인 성공 시각 */
     val updateCheckedAt: Long? = null,
     /** 새 버전 알림을 보낸 마지막 versionCode (같은 버전 중복 알림 방지) */
     val updateNotifiedVersion: Int = 0,

@@ -41,26 +41,34 @@ class WatchAlarmService : Service() {
         const val ACTION_STOP = "$PKG.STOP"
         const val EXTRA_NODE = "node"
         const val EXTRA_GOAL = "goal"
+        /** START를 받은 시각 (그 뒤에 STOP이 왔으면 시작하지 않음) */
+        const val EXTRA_RECEIVED_AT = "receivedAt"
+        private const val PREFS = "watch_alarm"
+        private const val KEY_STOP_AT = "stopAt"
+        private const val REQ_FALLBACK = 1
 
         private const val CHANNEL = "watch_alarm"
         private const val NOTIF_ID = 2001
         private const val MAX_RUN_MS = 60 * 60_000L
 
         fun startFromBackground(ctx: Context, nodeId: String, goal: Int) {
+            val receivedAt = System.currentTimeMillis()
             val i = Intent(ctx, WatchAlarmService::class.java)
                 .setAction(ACTION_START)
                 .putExtra(EXTRA_NODE, nodeId)
                 .putExtra(EXTRA_GOAL, goal)
+                .putExtra(EXTRA_RECEIVED_AT, receivedAt)
             try {
                 ctx.startForegroundService(i)
             } catch (e: IllegalStateException) {
                 // ForegroundServiceStartNotAllowedException → 정확한 알람 경유
                 Log.w(TAG, "직접 시작 불가 → 알람 경유", e)
                 val pi = PendingIntent.getBroadcast(
-                    ctx, 1,
+                    ctx, REQ_FALLBACK,
                     Intent(ctx, WatchAlarmReceiver::class.java)
                         .putExtra(EXTRA_NODE, nodeId)
-                        .putExtra(EXTRA_GOAL, goal),
+                        .putExtra(EXTRA_GOAL, goal)
+                        .putExtra(EXTRA_RECEIVED_AT, receivedAt),
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                 )
                 runCatching {
@@ -69,6 +77,25 @@ class WatchAlarmService : Service() {
                 }
             }
         }
+
+        /**
+         * 폰의 STOP: 실행 중이면 종료, 아직 시작 대기 중(알람 경유)이면 예약 취소 +
+         * STOP 시각 기록 → 뒤늦게 시작돼도 바로 끝냄 (폰은 꺼졌는데 워치만 60분 진동하는 문제 방지)
+         */
+        fun stopRequested(ctx: Context) {
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putLong(KEY_STOP_AT, System.currentTimeMillis()).apply()
+            PendingIntent.getBroadcast(
+                ctx, REQ_FALLBACK, Intent(ctx, WatchAlarmReceiver::class.java),
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+            )?.let { pi ->
+                runCatching { ctx.getSystemService(AlarmManager::class.java).cancel(pi) }
+                pi.cancel()
+            }
+            control(ctx, ACTION_STOP)
+        }
+
+        private fun stoppedSince(ctx: Context, receivedAt: Long): Boolean =
+            receivedAt > 0 && ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(KEY_STOP_AT, 0) >= receivedAt
 
         fun control(ctx: Context, action: String) {
             if (!WatchState.state.value.running) return
@@ -85,6 +112,8 @@ class WatchAlarmService : Service() {
     private var goal = 30
     private var steps = 0
     private var tracker: WatchStepTracker? = null
+    /** 마지막으로 폰에 보낸 시작 확인 문장 (재전송용) */
+    private var statusText: String? = null
     private var running = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -93,9 +122,20 @@ class WatchAlarmService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 enterForeground()
+                if (!running && stoppedSince(this, intent.getLongExtra(EXTRA_RECEIVED_AT, 0))) {
+                    // 시작 대기 중에 폰이 이미 알람을 끔
+                    Log.i(TAG, "시작 전에 STOP 받음 → 시작 안 함")
+                    finish()
+                    return START_NOT_STICKY
+                }
                 nodeId = intent.getStringExtra(EXTRA_NODE) ?: nodeId
                 goal = intent.getIntExtra(EXTRA_GOAL, goal)
-                if (!running) begin()
+                if (!running) {
+                    begin()
+                } else {
+                    // 폰이 서비스 재시작 후 START를 다시 보낸 경우: 시작 확인을 다시 보내 폰 진단이 '응답 없음'으로 남지 않게
+                    statusText?.let { send(WearProtocol.WATCH_STATUS, WearProtocol.encodeText(it)) }
+                }
             }
             ACTION_PAUSE -> if (running) {
                 runCatching { vibrator.cancel() }
@@ -148,7 +188,8 @@ class WatchAlarmService : Service() {
             WatchState.update { it.copy(sensorProblem = t.description) }
         }
         // 폰에 시작 확인 + 센서 상태 전송 (폰 기록에 남겨 원인 파악용)
-        send(WearProtocol.WATCH_STATUS, WearProtocol.encodeText((if (ok) "ok:" else "fail:") + t.description))
+        statusText = (if (ok) "ok:" else "fail:") + t.description
+        send(WearProtocol.WATCH_STATUS, WearProtocol.encodeText(statusText!!))
     }
 
     private fun onSteps(n: Int) {

@@ -15,7 +15,7 @@ class WatchMessageService : WearableListenerService() {
             )
             WearProtocol.PAUSE -> WatchAlarmService.control(this, WatchAlarmService.ACTION_PAUSE)
             WearProtocol.RESUME -> WatchAlarmService.control(this, WatchAlarmService.ACTION_RESUME)
-            WearProtocol.STOP -> WatchAlarmService.control(this, WatchAlarmService.ACTION_STOP)
+            WearProtocol.STOP -> WatchAlarmService.stopRequested(this)
         }
     }
 }

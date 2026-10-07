@@ -71,7 +71,8 @@ object Updater {
             Storage.json.decodeFromString(Remote.serializer(), httpGetText(VERSION_URL))
         }.onFailure { Log.w(TAG, "버전 확인 실패", it) }.getOrNull()
 
-        Stores.state.update(ctx) { it.copy(updateCheckedAt = System.currentTimeMillis()) }
+        // 실제로 확인에 성공했을 때만 기록 (오프라인 실패를 '방금 확인'으로 보이지 않게)
+        if (remote != null) Stores.state.update(ctx) { it.copy(updateCheckedAt = System.currentTimeMillis()) }
         when {
             remote == null -> {
                 _state.value = if (silent) before.takeIf { it !is State.Checking } ?: State.Idle

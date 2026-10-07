@@ -50,9 +50,10 @@ class WatchStepTracker(ctx: Context, private val onSteps: (Int) -> Unit) : Senso
             return false
         }
         val registered = listOf(Sensor.TYPE_STEP_DETECTOR, Sensor.TYPE_STEP_COUNTER).mapNotNull { type ->
-            val sensor = sm.getDefaultSensor(type, true) ?: sm.getDefaultSensor(type) ?: return@mapNotNull null
+            // wake-up 우선, 등록 실패하면 일반 센서로 재시도.
             // 걸음 센서는 이벤트 방식이라 주기는 의미 없음. 배치 지연 0 = 묶지 말고 바로 전달
-            if (sm.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL, 0)) sensor else null
+            listOfNotNull(sm.getDefaultSensor(type, true), sm.getDefaultSensor(type)).distinct()
+                .firstOrNull { sm.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL, 0) }
         }
         description = if (registered.isEmpty()) {
             "걸음 센서 없음"

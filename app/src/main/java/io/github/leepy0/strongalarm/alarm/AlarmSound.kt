@@ -18,13 +18,16 @@ import kotlin.math.sin
  * 알람 소리. USAGE_ALARM + 내장 스피커 우선 출력 (블루투스·이어폰 연결 상태에서도 스피커로).
  * 기본 알람음 재생 실패(잠금 해제 전 부팅 등) 시 합성 비프음으로 대체
  */
-class AlarmSound(private val ctx: Context) {
+/**
+ * @param restoreVolume 종료 시 되돌릴 알람 볼륨. null이면 지금 볼륨 (프로세스 재시작 후 복구 시 세션에 저장한 값 사용)
+ */
+class AlarmSound(private val ctx: Context, restoreVolume: Int? = null) {
     private val am = ctx.getSystemService(AudioManager::class.java)
     private var player: MediaPlayer? = null
     private var beep: AudioTrack? = null
-
     /** 종료 시 복구할 원래 알람 볼륨 */
-    private var originalVolume = am.getStreamVolume(AudioManager.STREAM_ALARM)
+    val originalVolume: Int = restoreVolume ?: am.getStreamVolume(AudioManager.STREAM_ALARM)
+    private var restored = false
 
     private val attrs = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_ALARM)
@@ -65,9 +68,9 @@ class AlarmSound(private val ctx: Context) {
         runCatching { beep?.stop() }
         beep?.release()
         beep = null
-        if (originalVolume >= 0) {
+        if (!restored) {
             runCatching { am.setStreamVolume(AudioManager.STREAM_ALARM, originalVolume, 0) }
-            originalVolume = -1
+            restored = true
         }
     }
 

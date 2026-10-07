@@ -31,9 +31,14 @@ class CalendarChangeJob : JobService() {
         return true
     }
 
-    override fun onStopJob(params: JobParameters): Boolean = true
+    override fun onStopJob(params: JobParameters): Boolean {
+        running = false
+        return true
+    }
 
     override fun onDestroy() {
+        // 코루틴이 시작 전에 취소되면 finally가 안 돌아 running이 남을 수 있음
+        running = false
         scope.cancel()
         super.onDestroy()
     }

@@ -88,6 +88,8 @@ data class Readiness(
     val calendarReadable: Boolean,
     /** 마지막으로 일정을 확인한 시각 (null = 아직 없음) */
     val lastCheck: Long? = null,
+    /** 마지막 23시 안내 실행 시각 (null = 아직 없음) */
+    val lastNightly: Long? = null,
     /** 마지막 확인 때 캘린더를 읽었는지 */
     val lastCheckCalendarOk: Boolean = true,
     /** 지난 알람 결과 문장과 시각 */
@@ -448,9 +450,9 @@ private fun readinessProblems(
             add(Problem("${agoKo(r.lastCheck, now)} 일정 확인 때 캘린더를 못 읽었어요", "확인", onOpenPermissions))
         !r.holidayCalendarSet -> add(Problem("공휴일 캘린더를 골라주세요", "선택", onOpenRules))
     }
-    // 23시 재확인이 하루 넘게 안 돌았으면 백그라운드 실행이 막힌 것
-    if (r.lastCheck != null && now - r.lastCheck > 26 * 3_600_000L) {
-        add(Problem("일정 확인이 ${agoKo(r.lastCheck, now)}에 멈췄어요", "확인", onOpenPermissions))
+    // 23시 안내가 하루 넘게 안 돌았으면 백그라운드 실행이 막힌 것 (앱을 열 때 하는 확인과 별개로 판단)
+    if (r.lastNightly != null && now - r.lastNightly > 26 * 3_600_000L) {
+        add(Problem("23시 안내가 ${agoKo(r.lastNightly, now)}부터 멈췄어요", "확인", onOpenPermissions))
     }
     if (r.watchNodes == 0) add(Problem("워치 연결 안 됨 · 폰 걸음만 세요"))
     when {

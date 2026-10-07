@@ -2,6 +2,7 @@
 
 package io.github.leepy0.strongalarm.ui
 
+import android.app.Activity
 import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
@@ -51,7 +52,10 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.leepy0.strongalarm.BuildConfig
 import io.github.leepy0.strongalarm.R
@@ -188,13 +192,36 @@ fun AppRoot(
     val permissions = remember(tick) { readPermissions(ctx) }
     val missingPermissions = permissions.count { !it.granted && !it.optional }
     val calendarReadable = permissions.first { it.key == PermissionKey.CALENDAR }.granted
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+    // 설정 앱에서 권한을 바꾸고 돌아오면 판정·재등록 다시 (캘린더 권한 등)
+    var lastGranted by remember { mutableStateOf<Set<PermissionKey>?>(null) }
+    LaunchedEffect(permissions) {
+        val granted = permissions.filter { it.granted }.map { it.key }.toSet()
+        if (lastGranted != null && lastGranted != granted) reschedule()
+        lastGranted = granted
+    }
+    var requestedKey by remember { mutableStateOf<PermissionKey?>(null) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         tick++
         reschedule()
+        // '다시 묻지 않음' 상태면 시스템 대화상자가 안 뜨므로 앱 설정 화면으로
+        val key = requestedKey
+        val permission = key?.let(::runtimePermissionOf)
+        val activity = ctx as? Activity
+        if (key != null && permission != null && result[permission] == false &&
+            activity?.shouldShowRequestPermissionRationale(permission) == false
+        ) {
+            openPermissionSettings(ctx, key)
+        }
+        requestedKey = null
     }
     val grant: (PermissionKey) -> Unit = { key ->
         val runtime = runtimePermissionOf(key)
-        if (runtime != null) launcher.launch(arrayOf(runtime)) else openPermissionSettings(ctx, key)
+        if (runtime != null) {
+            requestedKey = key
+            launcher.launch(arrayOf(runtime))
+        } else {
+            openPermissionSettings(ctx, key)
+        }
     }
 
     // ── 새 버전: 화면에 돌아올 때 10분 이상 지났으면 확인 ──
@@ -215,8 +242,12 @@ fun AppRoot(
     val newRemote = (updateState as? Updater.State.Available)?.remote
     // 다운로드 진행률: 받는 중이면 0.5초마다 갱신
     val apkDownload by ApkDownloads.progress.collectAsStateWithLifecycle()
-    LaunchedEffect(apkDownload?.id, tick) {
-        while (ApkDownloads.poll(ctx)) delay(500)
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(apkDownload?.id) {
+        // 화면이 보일 때만, 조회는 IO 스레드에서
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (withContext(Dispatchers.IO) { ApkDownloads.poll(ctx) }) delay(500)
+        }
     }
 
     // ── 현재 시각: 남은 시간 표시용, 분이 바뀔 때마다 갱신 ──
@@ -231,7 +262,11 @@ fun AppRoot(
     // ── 이번 주·다음 주 판정 (오늘 ~ 다음 주 일요일) ──
     val today = remember(tick, nowMillis) { LocalDate.now() }
     var judgements by remember { mutableStateOf<List<Judgement>>(emptyList()) }
-    LaunchedEffect(settings, appState.next, today) {
+    // 판정에 영향 있는 설정만 키로 (볼륨·걸음 수 바꿀 때 캘린더 재조회하지 않게)
+    LaunchedEffect(
+        settings.rule, settings.overrides, settings.skips, settings.alarmHour, settings.alarmMinute,
+        appState.next, today,
+    ) {
         val count = 14L - (today.dayOfWeek.value - 1)
         judgements = withContext(Dispatchers.IO) {
             val judge = AlarmScheduler.judgeFunction(ctx, today, count.toInt() + 1)
@@ -346,6 +381,10 @@ fun AppRoot(
 
     /** 테스트 알람: 정확한 알람 권한이 없으면 울리지 않으므로 먼저 확인 */
     fun testAlarm() {
+        if (alarm.phase != AlarmSession.UiPhase.IDLE) {
+            notify(if (alarm.phase == AlarmSession.UiPhase.DIMMING) "조명 디밍 중엔 테스트할 수 없어요" else "알람이 울리는 중이에요")
+            return
+        }
         if (!ctx.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()) {
             notify("정확한 알람 권한이 없어 테스트할 수 없어요", "권한 설정") { sub = Sub.PERMISSIONS }
             return
@@ -397,7 +436,8 @@ fun AppRoot(
         if (lightTestJob != null) return
         lightTestJob = scope.launch {
             try {
-                lightTest(ctx, lights.dimmerIds, lights.dimTargetLevel) { lightTestState = it }
+                val ok = lightTest(ctx, lights.dimmerIds, lights.dimTargetLevel) { lightTestState = it }
+                if (!ok) notify("조명 상태를 못 읽었어요. SmartThings 로그인과 인터넷을 확인해주세요.")
             } finally {
                 lightTestState = null
                 lightTestJob = null
@@ -555,6 +595,7 @@ fun AppRoot(
                                         holidayCalendarSet = settings.rule.holidayCalendarIds.isNotEmpty(),
                                         calendarReadable = calendarReadable,
                                         lastCheck = appState.lastCheck,
+                                        lastNightly = appState.lastNightlyAt,
                                         lastCheckCalendarOk = appState.lastCheckCalendarOk,
                                         lastResult = appState.lastResult,
                                         lastResultAt = appState.lastResultAt,
@@ -618,7 +659,8 @@ fun AppRoot(
                                 },
                                 missingPermissions = missingPermissions,
                             ),
-                            onStepGoal = { v -> save { it.copy(stepGoal = v) } },
+                            // 판정과 무관 → 재등록 없이 저장만
+                            onStepGoal = { v -> Stores.settings.update(ctx) { it.copy(stepGoal = v) } },
                             onVolume = { v ->
                                 // 판정과 무관하므로 재등록 없이 저장, 미리 듣는 중이면 즉시 반영
                                 Stores.settings.update(ctx) { it.copy(alarmVolume = v) }
@@ -798,11 +840,14 @@ private const val TEST_SEGMENT_MS = 1_600L
  * 스냅샷 → 1.6초 간격 5단계로 1→목표 밝기 → 1.6초 유지 → 원래대로 (약 10초).
  * 취소돼도 finally에서 원래 상태로 복구
  */
-private suspend fun lightTest(ctx: Context, ids: List<String>, target: Int, onState: (LightTestState) -> Unit) {
+private suspend fun lightTest(ctx: Context, ids: List<String>, target: Int, onState: (LightTestState) -> Unit): Boolean {
     onState(LightTestState(0f))
     val snap = withContext(Dispatchers.IO) { LightController.snapshot(ctx, ids) }
+    // 상태를 하나도 못 읽으면(로그인 만료·네트워크) 진행하지 않음
+    if (snap.values.all { it.on == null }) return false
     try {
-        val targets = ids.filter { snap[it]?.on != true }
+        // 꺼져 있던 게 확인된 조명만
+        val targets = ids.filter { snap[it]?.on == false }
         val segments = 6
         for (i in 0 until segments) {
             // 각 구간 시작 시 구간 끝 값을 넘기면 화면에서 1.6초 동안 부드럽게 채움
@@ -818,4 +863,5 @@ private suspend fun lightTest(ctx: Context, ids: List<String>, target: Int, onSt
             LightController.restore(ctx, SessionState("test", 0, Phase.DONE, snap, dimmersTouched = true), "조명 테스트 복구")
         }
     }
+    return true
 }
