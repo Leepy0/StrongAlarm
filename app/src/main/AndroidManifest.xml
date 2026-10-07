@@ -69,6 +69,15 @@
             android:directBootAware="true"
             android:exported="false" />
 
+        <!-- 업데이트 APK 다운로드 완료(무결성 확인)·알림의 [받기]. 완료 브로드캐스트는 시스템 다운로드 앱이 보냄 -->
+        <receiver
+            android:name=".update.ApkDownloadReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+            </intent-filter>
+        </receiver>
+
         <!-- 새 버전 확인 (6시간 주기) -->
         <service
             android:name=".update.UpdateJob"

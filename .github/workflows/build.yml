@@ -61,9 +61,10 @@ jobs:
             --arg phoneSha256 "$(sha256sum StrongAlarm-phone.apk | cut -d' ' -f1)" \
             --argjson phoneSize "$(stat -c%s StrongAlarm-phone.apk)" \
             --argjson watchVersionCode "$WATCH_VERSION_CODE" \
+            --arg watchSha256 "$(sha256sum StrongAlarm-watch.apk | cut -d' ' -f1)" \
             --argjson notes "$notes" \
             '{versionCode: $versionCode, versionName: $versionName, sha: $sha, phoneSha256: $phoneSha256,
-              phoneSize: $phoneSize, watchVersionCode: $watchVersionCode, notes: $notes}' > version.json
+              phoneSize: $phoneSize, watchVersionCode: $watchVersionCode, watchSha256: $watchSha256, notes: $notes}' > version.json
           cat version.json
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest StrongAlarm-phone.apk StrongAlarm-watch.apk version.json \

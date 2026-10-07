@@ -85,6 +85,7 @@ import io.github.leepy0.strongalarm.ui.home.Readiness
 import io.github.leepy0.strongalarm.ui.rules.RulesScreen
 import io.github.leepy0.strongalarm.ui.rules.RulesUiState
 import io.github.leepy0.strongalarm.ui.settings.AppVersionUi
+import io.github.leepy0.strongalarm.ui.settings.DownloadUi
 import io.github.leepy0.strongalarm.ui.settings.HistoryScreen
 import io.github.leepy0.strongalarm.ui.settings.LightTestState
 import io.github.leepy0.strongalarm.ui.settings.LightsScreen
@@ -94,6 +95,7 @@ import io.github.leepy0.strongalarm.ui.settings.PermissionsScreen
 import io.github.leepy0.strongalarm.ui.settings.SettingsScreen
 import io.github.leepy0.strongalarm.ui.settings.SettingsUiState
 import io.github.leepy0.strongalarm.ui.theme.Palette
+import io.github.leepy0.strongalarm.update.ApkDownloads
 import io.github.leepy0.strongalarm.update.Updater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -211,6 +213,11 @@ fun AppRoot(
         }
     }
     val newRemote = (updateState as? Updater.State.Available)?.remote
+    // 다운로드 진행률: 받는 중이면 0.5초마다 갱신
+    val apkDownload by ApkDownloads.progress.collectAsStateWithLifecycle()
+    LaunchedEffect(apkDownload?.id, tick) {
+        while (ApkDownloads.poll(ctx)) delay(500)
+    }
 
     // ── 현재 시각: 남은 시간 표시용, 분이 바뀔 때마다 갱신 ──
     var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -347,11 +354,17 @@ fun AppRoot(
         notify("10초 뒤 울려요. 화면을 꺼두고 기다려보세요.")
     }
 
-    /** 브라우저로 APK 다운로드 → 다운로드 알림에서 시스템 설치 */
-    fun download(url: String) {
-        runCatching { ctx.startActivity(Updater.downloadIntent(url)) }
-            .onSuccess { notify("다운로드가 끝나면 알림을 눌러 설치해주세요") }
-            .onFailure { notify("브라우저를 열 수 없어요") }
+    fun openUrl(url: String) {
+        runCatching { ctx.startActivity(Updater.browserIntent(url)) }.onFailure { notify("브라우저를 열 수 없어요") }
+    }
+
+    /** 시스템 다운로드로 APK 받기 → 다운로드 완료 알림·목록에서 시스템 설치 */
+    fun download(kind: ApkDownloads.Kind) {
+        val r = newRemote ?: return
+        val phone = kind == ApkDownloads.Kind.PHONE
+        val version = if (phone) r.versionName else "0.2.${r.watchVersionCode}"
+        runCatching { ApkDownloads.start(ctx, kind, version, if (phone) r.phoneSha256 else r.watchSha256) }
+            .onFailure { notify("다운로드를 시작하지 못했어요. 웹에서 받아주세요.", "웹에서 받기") { openUrl(Updater.RELEASE_PAGE) } }
     }
 
     /** 알람 소리 미리 듣기 (4초). 다시 누르면 멈춤. 끝나면 원래 볼륨 복구 */
@@ -593,6 +606,9 @@ fun AppRoot(
                                     },
                                     checking = updateState == Updater.State.Checking,
                                     watchChanged = (newRemote?.watchVersionCode ?: 0) > BuildConfig.WATCH_VERSION_CODE,
+                                    download = apkDownload?.let { d ->
+                                        DownloadUi(d.kind.label, d.fraction, d.done, d.reason.takeIf { d.failed })
+                                    },
                                 ),
                                 lightsSummary = when {
                                     !loggedIn -> null
@@ -614,8 +630,13 @@ fun AppRoot(
                             onTestAlarm = ::testAlarm,
                             onOpenHistory = { sub = Sub.HISTORY },
                             onCheckUpdate = { scope.launch { Updater.check(ctx, silent = false) } },
-                            onDownloadPhone = { download(Updater.PHONE_APK_URL) },
-                            onDownloadWatch = { download(Updater.WATCH_APK_URL) },
+                            onDownloadPhone = { download(ApkDownloads.Kind.PHONE) },
+                            onDownloadWatch = { download(ApkDownloads.Kind.WATCH) },
+                            onOpenDownloads = {
+                                runCatching { ctx.startActivity(ApkDownloads.openDownloadsIntent()) }
+                                    .onFailure { notify("내 파일 > 다운로드에서 StrongAlarm APK를 눌러 설치해주세요") }
+                            },
+                            onOpenReleasePage = { openUrl(Updater.RELEASE_PAGE) },
                         )
                     }
                 }

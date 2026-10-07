@@ -134,6 +134,8 @@ data class AppState(
     val updateCheckedAt: Long? = null,
     /** 새 버전 알림을 보낸 마지막 versionCode (같은 버전 중복 알림 방지) */
     val updateNotifiedVersion: Int = 0,
+    /** 업데이트 APK 다운로드 id → 기대 sha256 (완료 시 무결성 확인, 업데이트 후 정리) */
+    val updateDownloads: Map<String, String> = emptyMap(),
 )
 
 object Stores {

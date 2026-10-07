@@ -27,6 +27,7 @@ import io.github.leepy0.strongalarm.ui.home.Readiness
 import io.github.leepy0.strongalarm.ui.rules.RulesScreen
 import io.github.leepy0.strongalarm.ui.rules.RulesUiState
 import io.github.leepy0.strongalarm.ui.settings.AppVersionUi
+import io.github.leepy0.strongalarm.ui.settings.DownloadUi
 import io.github.leepy0.strongalarm.ui.settings.HistoryScreen
 import io.github.leepy0.strongalarm.ui.settings.LightTestState
 import io.github.leepy0.strongalarm.ui.settings.LightsScreen
@@ -240,6 +241,7 @@ class ScreenshotTest {
                     installed = "0.2.12", newVersion = "0.2.15",
                     notes = listOf("자동 업데이트 확인", "홈: 남은 시간 표시, 월~일 달력", "걸음 수 집계 보강"),
                     watchChanged = true,
+                    download = DownloadUi("폰", 0.42f, done = false),
                 ),
             ),
             {}, {}, {}, {}, {}, {}, {}, {}, {}, {},

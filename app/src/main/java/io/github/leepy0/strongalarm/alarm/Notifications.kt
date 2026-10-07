@@ -11,7 +11,7 @@ import io.github.leepy0.strongalarm.data.Stores
 import io.github.leepy0.strongalarm.ui.AlarmActivity
 import io.github.leepy0.strongalarm.ui.MainActivity
 import io.github.leepy0.strongalarm.ui.pretty
-import io.github.leepy0.strongalarm.update.Updater
+import io.github.leepy0.strongalarm.update.ApkDownloadReceiver
 
 object Notifications {
     const val CH_RING = "alarm_ring"
@@ -115,7 +115,7 @@ object Notifications {
         ctx.getSystemService(NotificationManager::class.java).notify(ID_NIGHTLY, builder.build())
     }
 
-    /** 새 버전 알림: 누르면 앱의 설정 탭(변경 내용), [받기]는 브라우저로 APK 다운로드 */
+    /** 새 버전 알림: 누르면 앱의 설정 탭(변경 내용), [받기]는 시스템 다운로드로 APK 받기 */
     fun showUpdate(ctx: Context, title: String, text: String) {
         val open = PendingIntent.getActivity(
             ctx, 31,
@@ -124,8 +124,9 @@ object Notifications {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val download = PendingIntent.getActivity(
-            ctx, 32, Updater.downloadIntent(),
+        val download = PendingIntent.getBroadcast(
+            ctx, 32,
+            Intent(ctx, ApkDownloadReceiver::class.java).setAction(ApkDownloadReceiver.ACTION_START),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val n = Notification.Builder(ctx, CH_UPDATE)

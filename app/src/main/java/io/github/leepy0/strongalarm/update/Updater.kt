@@ -24,6 +24,8 @@ object Updater {
     private const val VERSION_URL = "$BASE/version.json"
     const val PHONE_APK_URL = "$BASE/StrongAlarm-phone.apk"
     const val WATCH_APK_URL = "$BASE/StrongAlarm-watch.apk"
+    /** DownloadManager가 안 될 때 대안: 릴리스 페이지 */
+    const val RELEASE_PAGE = "https://github.com/Leepy0/StrongAlarm/releases/tag/latest"
 
     @Serializable
     data class Note(val v: Int, val s: String)
@@ -36,6 +38,7 @@ object Updater {
         val phoneSha256: String = "",
         val phoneSize: Long = 0,
         val watchVersionCode: Int = 0,
+        val watchSha256: String = "",
         val notes: List<Note> = emptyList(),
     )
 
@@ -92,8 +95,8 @@ object Updater {
         return remote.notes.filter { it.v > cur }
     }
 
-    /** 브라우저로 APK 다운로드 (다운로드 후 알림을 눌러 시스템 설치 화면에서 설치) */
-    fun downloadIntent(url: String = PHONE_APK_URL): Intent =
+    /** 브라우저로 열기 (릴리스 페이지 등) */
+    fun browserIntent(url: String = RELEASE_PAGE): Intent =
         Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
     private fun httpGetText(url: String): String {

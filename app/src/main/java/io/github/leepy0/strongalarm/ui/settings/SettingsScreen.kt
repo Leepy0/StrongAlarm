@@ -13,7 +13,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -63,6 +65,18 @@ data class AppVersionUi(
     val checking: Boolean = false,
     /** 새 버전에서 워치 앱도 바뀜 */
     val watchChanged: Boolean = false,
+    /** APK 다운로드 진행 (없으면 null) */
+    val download: DownloadUi? = null,
+)
+
+data class DownloadUi(
+    /** "폰" / "워치" */
+    val label: String,
+    /** 0~1, 크기 모르면 null */
+    val fraction: Float?,
+    val done: Boolean,
+    /** 실패 사유. null = 실패 아님 */
+    val failed: String? = null,
 )
 
 @Composable
@@ -78,6 +92,8 @@ fun SettingsScreen(
     onCheckUpdate: () -> Unit,
     onDownloadPhone: () -> Unit,
     onDownloadWatch: () -> Unit,
+    onOpenDownloads: () -> Unit = {},
+    onOpenReleasePage: () -> Unit = {},
 ) {
     Column(
         Modifier
@@ -149,18 +165,20 @@ fun SettingsScreen(
 
         Column(Modifier.padding(bottom = 24.dp)) {
             SectionLabel("앱")
-            Group { AppVersionRows(state.app, onCheckUpdate, onDownloadPhone, onDownloadWatch) }
+            Group { AppVersionRows(state.app, onCheckUpdate, onDownloadPhone, onDownloadWatch, onOpenDownloads, onOpenReleasePage) }
         }
     }
 }
 
-/** 버전·새 버전 안내. 설치는 브라우저 다운로드 → 시스템 설치 화면 */
+/** 버전·새 버전 안내. 설치는 시스템 다운로드 → 다운로드 알림·목록에서 APK를 눌러 시스템 설치 화면 */
 @Composable
 private fun AppVersionRows(
     app: AppVersionUi,
     onCheck: () -> Unit,
     onDownloadPhone: () -> Unit,
     onDownloadWatch: () -> Unit,
+    onOpenDownloads: () -> Unit,
+    onOpenReleasePage: () -> Unit,
 ) {
     if (app.newVersion == null) {
         RowItem(
@@ -176,17 +194,20 @@ private fun AppVersionRows(
         )
         return
     }
+    val busy = app.download?.let { !it.done && it.failed == null } == true
     RowItem(
         title = "새 버전 ${app.newVersion}",
         subtitle = "지금 ${app.installed} · 설정은 그대로 남아요",
         trailing = {
             Button(
                 onClick = onDownloadPhone,
+                enabled = !busy,
                 colors = ButtonDefaults.buttonColors(containerColor = Palette.Sun, contentColor = Palette.SunInk),
                 modifier = Modifier.padding(end = 8.dp),
             ) { Text("받기") }
         },
     )
+    app.download?.let { DownloadBlock(it, onOpenDownloads) }
     if (app.notes.isNotEmpty()) {
         Column(
             Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
@@ -200,12 +221,18 @@ private fun AppVersionRows(
             }
         }
     }
-    Text(
-        "받기를 누르면 브라우저로 내려받아요. 다운로드 알림을 눌러 설치해주세요.",
-        style = MaterialTheme.typography.bodySmall,
-        color = Palette.Mist,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
-    )
+    Row(
+        Modifier.padding(start = 16.dp, end = 8.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "다 받으면 다운로드 알림을 눌러 설치해요.",
+            style = MaterialTheme.typography.bodySmall,
+            color = Palette.Mist,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(onClick = onOpenReleasePage) { Text("웹에서 받기", color = Palette.Mist) }
+    }
     if (app.watchChanged) {
         GroupDivider()
         RowItem(
@@ -213,6 +240,42 @@ private fun AppVersionRows(
             subtitle = "워치 APK를 받아 Wear Installer로 설치해주세요",
             onClick = onDownloadWatch,
         )
+    }
+}
+
+/** 다운로드 진행·완료·실패 표시 */
+@Composable
+private fun DownloadBlock(d: DownloadUi, onOpenDownloads: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
+        when {
+            d.failed != null -> Text("${d.label} APK: ${d.failed}", style = MaterialTheme.typography.bodyMedium, color = Palette.Ember)
+            d.done -> Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${d.label} APK를 다 받았어요. 다운로드 알림이나 목록에서 눌러 설치해요.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Palette.Ink,
+                    modifier = Modifier.weight(1f),
+                )
+                Button(
+                    onClick = onOpenDownloads,
+                    colors = ButtonDefaults.buttonColors(containerColor = Palette.Sun, contentColor = Palette.SunInk),
+                    modifier = Modifier.padding(start = 8.dp),
+                ) { Text("목록 열기") }
+            }
+            else -> {
+                Text(
+                    "${d.label} APK 받는 중" + (d.fraction?.let { " ${(it * 100).toInt()}%" } ?: ""),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Palette.Ink,
+                )
+                val mod = Modifier.fillMaxWidth().padding(top = 8.dp)
+                if (d.fraction != null) {
+                    LinearProgressIndicator(progress = { d.fraction }, modifier = mod, color = Palette.SunText, trackColor = Palette.Line)
+                } else {
+                    LinearProgressIndicator(modifier = mod, color = Palette.SunText, trackColor = Palette.Line)
+                }
+            }
+        }
     }
 }
 

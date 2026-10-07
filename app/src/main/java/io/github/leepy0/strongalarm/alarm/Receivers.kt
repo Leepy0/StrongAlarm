@@ -8,6 +8,7 @@ import io.github.leepy0.strongalarm.data.Phase
 import io.github.leepy0.strongalarm.data.Stores
 import io.github.leepy0.strongalarm.data.dayLocked
 import io.github.leepy0.strongalarm.lights.LightController
+import io.github.leepy0.strongalarm.update.ApkDownloads
 import io.github.leepy0.strongalarm.update.Updater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -84,6 +85,7 @@ class BootReceiver : BroadcastReceiver() {
             }
             if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
                 ctx.getSystemService(android.app.NotificationManager::class.java).cancel(Notifications.ID_UPDATE)
+                ApkDownloads.cleanup(ctx)
                 HistoryLog.add(ctx, "업데이트 완료 → ${Updater.installedVersionName(ctx)}")
             }
             HistoryLog.add(ctx, "재등록 (${intent.action?.substringAfterLast('.')})")
