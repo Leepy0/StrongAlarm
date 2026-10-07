@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import io.github.leepy0.strongalarm.core.Judgement
 import io.github.leepy0.strongalarm.data.Stores
 import io.github.leepy0.strongalarm.ui.AlarmActivity
@@ -23,6 +25,7 @@ object Notifications {
     const val ID_RING = 1002
     const val ID_NIGHTLY = 1003
     const val ID_UPDATE = 1004
+    const val ID_FULL_SCREEN = 1005
 
     fun createChannels(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
@@ -80,11 +83,13 @@ object Notifications {
             confirmed -> "내일 ${j.time} 알람 · 확인됨"
             else -> "내일 ${j.time} 알람, 울려도 될까요?"
         }
-        val text = when {
+        val base = when {
             !j.ring -> "${j.date.pretty()} · ${j.describe()}"
             confirmed -> "${j.date.pretty()} · ${j.describe()}. 쉬는 날 버튼 없이 걸어야만 꺼져요."
             else -> "${j.date.pretty()} · ${j.describe()}. 확인하면 아침에 쉬는 날 버튼으로 끌 수 없어요."
         }
+        // 울리는 날인데 전체 화면 알림이 꺼져 있으면 경고 (업데이트 후 시스템이 끄는 경우)
+        val text = if (j.ring && !canFullScreen(ctx)) "$base\n전체 화면 알림 권한이 꺼져 있어요. 앱에서 다시 켜주세요." else base
         fun broadcast(req: Int, action: String) = PendingIntent.getBroadcast(
             ctx, req,
             Intent(ctx, AlarmReceiver::class.java).setAction(action).putExtra(AlarmScheduler.EXTRA_DATE, j.date.toString()),
@@ -113,6 +118,28 @@ object Notifications {
         }
         action("시각 변경", changeTime)
         ctx.getSystemService(NotificationManager::class.java).notify(ID_NIGHTLY, builder.build())
+    }
+
+    fun canFullScreen(ctx: Context) = ctx.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+
+    /** 업데이트 후 전체 화면 알림 권한이 꺼졌을 때: 누르면 해당 설정 화면 */
+    fun showFullScreenLost(ctx: Context) {
+        val settings = PendingIntent.getActivity(
+            ctx, 40,
+            Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:${ctx.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val text = "업데이트하면 시스템이 이 권한을 꺼요. 꺼져 있으면 잠금화면에 알람 화면이 바로 뜨지 않아요. 눌러서 다시 켜주세요."
+        val n = Notification.Builder(ctx, CH_UPDATE)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentTitle("전체 화면 알림 권한이 꺼졌어요")
+            .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .setContentIntent(settings)
+            .build()
+        ctx.getSystemService(NotificationManager::class.java).notify(ID_FULL_SCREEN, n)
     }
 
     /** 새 버전 알림: 누르면 앱의 설정 탭(변경 내용), [받기]는 시스템 다운로드로 APK 받기 */

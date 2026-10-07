@@ -87,6 +87,11 @@ class BootReceiver : BroadcastReceiver() {
                 ctx.getSystemService(android.app.NotificationManager::class.java).cancel(Notifications.ID_UPDATE)
                 ApkDownloads.cleanup(ctx)
                 HistoryLog.add(ctx, "업데이트 완료 → ${Updater.installedVersionName(ctx)}")
+                // 사이드로드 앱은 업데이트 때 전체 화면 알림 권한이 꺼질 수 있음 → 바로 알려서 다시 켜게
+                if (!Notifications.canFullScreen(ctx)) {
+                    Notifications.showFullScreenLost(ctx)
+                    HistoryLog.add(ctx, "업데이트 후 전체 화면 알림 권한 꺼짐 → 알림으로 안내")
+                }
             }
             HistoryLog.add(ctx, "재등록 (${intent.action?.substringAfterLast('.')})")
         }
