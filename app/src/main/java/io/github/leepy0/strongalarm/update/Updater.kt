@@ -16,7 +16,7 @@ import java.net.URL
 
 /**
  * 새 버전 확인 (GitHub 'latest' 릴리스의 version.json, 공개 레포라 인증 불필요).
- * 설치는 앱이 직접 하지 않고, 브라우저로 APK를 받아 시스템 설치 화면에서 진행
+ * 설치는 앱이 직접 하지 않음: ApkDownloads가 시스템 다운로드로 받고, 다운로드 알림·목록에서 시스템 설치 화면으로 진행
  */
 object Updater {
     private const val TAG = "Updater"
