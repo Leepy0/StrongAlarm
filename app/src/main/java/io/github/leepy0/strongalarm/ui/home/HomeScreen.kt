@@ -132,7 +132,7 @@ fun HomeScreen(
     onOpenPermissions: () -> Unit,
     onOpenRules: () -> Unit,
     onOpenLights: () -> Unit,
-    onOpenUpdate: () -> Unit,
+    @Suppress("UNUSED_PARAMETER") onOpenUpdate: () -> Unit, // 새 버전 안내는 알림·설정에서 (문제 항목이 아님)
     onToggleConfirm: () -> Unit = {},
 ) {
     Column(
@@ -168,9 +168,13 @@ fun HomeScreen(
             }
         }
 
-        Spacer(Modifier.height(32.dp))
-        SectionLabel("준비 상태")
-        ReadinessList(state.readiness, state.nowMillis, onOpenPermissions, onOpenRules, onOpenLights, onOpenUpdate)
+        // 문제가 있을 때만 표시 (정상 항목은 숨김)
+        val problems = readinessProblems(state.readiness, state.nowMillis, onOpenPermissions, onOpenRules, onOpenLights)
+        if (problems.isNotEmpty()) {
+            Spacer(Modifier.height(32.dp))
+            SectionLabel("확인이 필요해요")
+            Column { problems.forEach { p -> StatusLine(false, p.text, p.action, p.onAction) } }
+        }
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -427,49 +431,30 @@ private fun LegendText(text: String) {
     Text(text, style = MaterialTheme.typography.labelSmall, color = Palette.Mist, modifier = Modifier.padding(start = 8.dp, end = 16.dp))
 }
 
-@Composable
-private fun ReadinessList(
+private data class Problem(val text: String, val action: String? = null, val onAction: (() -> Unit)? = null)
+
+/** 조치가 필요한 항목만 (정상·선택 사항은 제외) */
+private fun readinessProblems(
     r: Readiness,
     now: Long,
     onOpenPermissions: () -> Unit,
     onOpenRules: () -> Unit,
     onOpenLights: () -> Unit,
-    onOpenUpdate: () -> Unit,
-) {
-    Column {
-        r.newVersion?.let { StatusLine(null, "새 버전이 있어요 · $it", "보기", onOpenUpdate) }
-        // 시스템 상태 가시성: 앱이 실제로 일정을 확인했는지, 지난 알람이 어떻게 끝났는지
-        r.lastCheck?.let { at ->
-            if (r.lastCheckCalendarOk) {
-                StatusLine(true, "일정 확인: ${agoKo(at, now)}")
-            } else {
-                StatusLine(false, "${agoKo(at, now)} 일정 확인 때 캘린더를 못 읽었어요", "확인", onOpenPermissions)
-            }
-        }
-        if (r.lastResult != null && r.lastResultAt != null) {
-            StatusLine(true, "지난 알람: ${r.lastResult} (${agoKo(r.lastResultAt, now)})")
-        }
-        if (r.missingPermissions > 0) {
-            StatusLine(false, "권한 ${r.missingPermissions}개가 필요해요", "설정", onOpenPermissions)
-        } else {
-            StatusLine(true, "권한 준비됨")
-        }
-        when {
-            !r.calendarReadable -> StatusLine(false, "캘린더를 읽지 못해 매일 울려요", "확인", onOpenPermissions)
-            !r.holidayCalendarSet -> StatusLine(false, "공휴일 캘린더를 골라주세요", "선택", onOpenRules)
-            else -> StatusLine(true, "공휴일 캘린더 연결됨")
-        }
-        when (r.watchNodes) {
-            null -> StatusLine(null, "워치 확인 중")
-            0 -> StatusLine(null, "워치 연결 안 됨, 폰 걸음만 세요")
-            else -> StatusLine(true, "워치 연결됨")
-        }
-        when {
-            r.lightsAuthError && r.lightsLinked != null ->
-                StatusLine(false, "조명 로그인이 만료됐어요", "다시 로그인", onOpenLights)
-            r.lightsLinked == null -> StatusLine(null, "조명 연동 안 함")
-            r.lightsLinked == 0 -> StatusLine(null, "조명 계정 연결됨, 기기를 골라주세요", "선택", onOpenLights)
-            else -> StatusLine(true, "조명 ${r.lightsLinked}개 연결됨")
-        }
+): List<Problem> = buildList {
+    if (r.missingPermissions > 0) add(Problem("권한 ${r.missingPermissions}개가 필요해요", "설정", onOpenPermissions))
+    when {
+        !r.calendarReadable -> add(Problem("캘린더를 읽지 못해 매일 울려요", "확인", onOpenPermissions))
+        !r.lastCheckCalendarOk && r.lastCheck != null ->
+            add(Problem("${agoKo(r.lastCheck, now)} 일정 확인 때 캘린더를 못 읽었어요", "확인", onOpenPermissions))
+        !r.holidayCalendarSet -> add(Problem("공휴일 캘린더를 골라주세요", "선택", onOpenRules))
+    }
+    // 23시 재확인이 하루 넘게 안 돌았으면 백그라운드 실행이 막힌 것
+    if (r.lastCheck != null && now - r.lastCheck > 26 * 3_600_000L) {
+        add(Problem("일정 확인이 ${agoKo(r.lastCheck, now)}에 멈췄어요", "확인", onOpenPermissions))
+    }
+    if (r.watchNodes == 0) add(Problem("워치 연결 안 됨 · 폰 걸음만 세요"))
+    when {
+        r.lightsAuthError && r.lightsLinked != null -> add(Problem("조명 로그인이 만료됐어요", "다시 로그인", onOpenLights))
+        r.lightsLinked == 0 -> add(Problem("조명 계정 연결됨, 기기를 골라주세요", "선택", onOpenLights))
     }
 }
