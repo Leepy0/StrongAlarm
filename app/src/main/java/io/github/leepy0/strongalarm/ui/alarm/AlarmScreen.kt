@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -56,6 +57,8 @@ data class AlarmUiState(
     val paused: Boolean,
     /** 걸음 센서 문제 안내 (예: "워치: 신체 활동 권한 없음"). null = 정상 */
     val sensorNote: String? = null,
+    /** 전날 울림 확인 → 쉬는 날 버튼 대신 안내만 */
+    val restLocked: Boolean = false,
 ) {
     val steps get() = maxOf(phoneSteps, watchSteps)
 }
@@ -110,7 +113,7 @@ fun AlarmScreen(state: AlarmUiState, onPress: () -> Unit, onCancel: () -> Unit, 
                 )
             }
             Gap(tall, 48)
-            HoldToRest(state.paused, onPress, onCancel, onComplete)
+            if (state.restLocked) RestLocked() else HoldToRest(state.paused, onPress, onCancel, onComplete)
         }
     }
 }
@@ -141,6 +144,34 @@ private fun StepRing(steps: Int, goal: Int) {
             Text("$steps", style = MaterialTheme.typography.displayLarge, color = Palette.Ink)
             Text("/ $goal 걸음", style = MaterialTheme.typography.bodyLarge, color = Palette.Mist)
         }
+    }
+}
+
+/** 전날 밤 울림을 확인한 알람: 쉬는 날 버튼 자리에 이유만 표시 (누를 수 있는 요소 없음) */
+@Composable
+private fun RestLocked() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .clip(CircleShape)
+                .border(1.dp, Palette.Line, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "어젯밤 울림을 확인했어요",
+                style = MaterialTheme.typography.titleMedium,
+                color = Palette.Mist,
+                textAlign = TextAlign.Center,
+            )
+        }
+        Text(
+            "쉬는 날 버튼 없이 걸어야만 꺼져요",
+            style = MaterialTheme.typography.bodySmall,
+            color = Palette.Mist,
+            modifier = Modifier.padding(top = 12.dp),
+        )
     }
 }
 

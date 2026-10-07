@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import io.github.leepy0.strongalarm.core.Judgement
+import io.github.leepy0.strongalarm.data.Stores
 import io.github.leepy0.strongalarm.ui.AlarmActivity
 import io.github.leepy0.strongalarm.ui.MainActivity
 import io.github.leepy0.strongalarm.ui.pretty
@@ -67,41 +68,50 @@ object Notifications {
             .build()
     }
 
-    /** 23시 안내: 내일 울림 여부 + 사유, [시각 변경] [그래도 울리기] */
+    /**
+     * 23시 안내: 내일 울림 여부 + 사유.
+     * 울리는 날: [울림 확인] [쉬는 날로] [시각 변경] — 확인하면 그날은 쉬는 날 버튼 없이 걸어야만 꺼짐
+     * 쉬는 날: [그래도 울리기] [시각 변경]
+     */
     fun showNightly(ctx: Context, j: Judgement) {
-        val title = if (j.ring) "내일 ${j.time} 알람" else "내일 알람 없음"
+        val confirmed = j.ring && Stores.settings.get(ctx).isConfirmed(j.date)
+        val title = when {
+            !j.ring -> "내일 알람 없음"
+            confirmed -> "내일 ${j.time} 알람 · 확인됨"
+            else -> "내일 ${j.time} 알람, 울려도 될까요?"
+        }
+        val text = when {
+            !j.ring -> "${j.date.pretty()} · ${j.describe()}"
+            confirmed -> "${j.date.pretty()} · ${j.describe()}. 쉬는 날 버튼 없이 걸어야만 꺼져요."
+            else -> "${j.date.pretty()} · ${j.describe()}. 확인하면 아침에 쉬는 날 버튼으로 끌 수 없어요."
+        }
+        fun broadcast(req: Int, action: String) = PendingIntent.getBroadcast(
+            ctx, req,
+            Intent(ctx, AlarmReceiver::class.java).setAction(action).putExtra(AlarmScheduler.EXTRA_DATE, j.date.toString()),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val changeTime = PendingIntent.getActivity(
+            ctx, 20,
+            Intent(ctx, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_OVERRIDE_DATE, j.date.toString())
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         val builder = Notification.Builder(ctx, CH_NIGHTLY)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle(title)
-            .setContentText("${j.date.pretty()} · ${j.describe()}")
+            .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
             .setAutoCancel(true)
             .setContentIntent(mainIntent(ctx))
-            .addAction(
-                Notification.Action.Builder(
-                    null, "시각 변경",
-                    PendingIntent.getActivity(
-                        ctx, 20,
-                        Intent(ctx, MainActivity::class.java)
-                            .putExtra(MainActivity.EXTRA_OVERRIDE_DATE, j.date.toString())
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                    ),
-                ).build(),
-            )
-        if (!j.ring) {
-            builder.addAction(
-                Notification.Action.Builder(
-                    null, "그래도 울리기",
-                    PendingIntent.getBroadcast(
-                        ctx, 21,
-                        Intent(ctx, AlarmReceiver::class.java)
-                            .setAction(AlarmScheduler.ACTION_FORCE_RING)
-                            .putExtra(AlarmScheduler.EXTRA_DATE, j.date.toString()),
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-                    ),
-                ).build(),
-            )
+        fun action(label: String, pi: PendingIntent) = builder.addAction(Notification.Action.Builder(null, label, pi).build())
+        if (j.ring) {
+            if (!confirmed) action("울림 확인", broadcast(22, AlarmScheduler.ACTION_CONFIRM))
+            action("쉬는 날로", broadcast(23, AlarmScheduler.ACTION_SKIP))
+        } else {
+            action("그래도 울리기", broadcast(21, AlarmScheduler.ACTION_FORCE_RING))
         }
+        action("시각 변경", changeTime)
         ctx.getSystemService(NotificationManager::class.java).notify(ID_NIGHTLY, builder.build())
     }
 

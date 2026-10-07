@@ -36,6 +36,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.leepy0.strongalarm.core.Countdown
 import io.github.leepy0.strongalarm.ui.agoKo
+import io.github.leepy0.strongalarm.R
+import io.github.leepy0.strongalarm.ui.components.AppIcon
 import io.github.leepy0.strongalarm.ui.components.ScreenPadding
 import io.github.leepy0.strongalarm.ui.components.SectionLabel
 import io.github.leepy0.strongalarm.ui.components.StatusLine
@@ -59,9 +61,22 @@ data class DayCell(
     val label: String,
     /** 시트에 보여줄 이유 문장 */
     val reason: String,
+    /** 전날 울림 확인됨 (쉬는 날 버튼 잠금) */
+    val confirmed: Boolean = false,
+    /** 직접 쉬는 날로 지정한 날 */
+    val manualOff: Boolean = false,
 )
 
-data class NextAlarm(val date: LocalDate, val time: LocalTime, val reason: String, val ringAt: Long)
+data class NextAlarm(
+    val date: LocalDate,
+    val time: LocalTime,
+    val reason: String,
+    val ringAt: Long,
+    /** 울림 확인됨 → 쉬는 날 버튼 잠금 */
+    val confirmed: Boolean = false,
+    /** 알람 진행 중이라 확인 취소 불가 */
+    val locked: Boolean = false,
+)
 
 data class Readiness(
     val missingPermissions: Int,
@@ -118,6 +133,7 @@ fun HomeScreen(
     onOpenRules: () -> Unit,
     onOpenLights: () -> Unit,
     onOpenUpdate: () -> Unit,
+    onToggleConfirm: () -> Unit = {},
 ) {
     Column(
         Modifier
@@ -128,7 +144,7 @@ fun HomeScreen(
     ) {
         if (state.ringing) RingingBanner(onOpenAlarm)
 
-        Hero(state, onOpenRules)
+        Hero(state, onOpenRules, onToggleConfirm)
 
         Spacer(Modifier.height(32.dp))
         SectionLabel("이번 주 · 다음 주")
@@ -178,7 +194,7 @@ private fun RingingBanner(onOpen: () -> Unit) {
 }
 
 @Composable
-private fun Hero(state: HomeUiState, onOpenRules: () -> Unit) {
+private fun Hero(state: HomeUiState, onOpenRules: () -> Unit, onToggleConfirm: () -> Unit) {
     val next = state.next
     Column(Modifier.padding(top = 32.dp)) {
         if (next == null) {
@@ -218,6 +234,7 @@ private fun Hero(state: HomeUiState, onOpenRules: () -> Unit) {
                 color = Palette.Mist,
                 modifier = Modifier.padding(top = 4.dp),
             )
+            ConfirmRow(next, onToggleConfirm)
             if (state.dimming) {
                 Text(
                     "조명을 서서히 켜는 중",
@@ -226,6 +243,39 @@ private fun Hero(state: HomeUiState, onOpenRules: () -> Unit) {
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }
+        }
+    }
+}
+
+/**
+ * 울림 확인: 확인하면 그날 알람은 쉬는 날 버튼 없이 걸어야만 꺼짐.
+ * 확인 전엔 회색 안내 + [울림 확인], 확인 후엔 체크 + [취소] (알람 진행 중엔 취소 숨김)
+ */
+@Composable
+private fun ConfirmRow(next: NextAlarm, onToggle: () -> Unit) {
+    Row(
+        Modifier.padding(top = 8.dp).fillMaxWidth().heightIn(min = 48.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (next.confirmed) {
+            AppIcon(R.drawable.ic_check, Palette.Ink, size = 20)
+            Text(
+                "울림 확인됨 · 걸어야만 꺼져요",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Palette.Ink,
+                modifier = Modifier.padding(start = 8.dp).weight(1f),
+            )
+            if (!next.locked) {
+                TextButton(onClick = onToggle) { Text("취소", color = Palette.Mist) }
+            }
+        } else {
+            Text(
+                "확인 전이라 쉬는 날 버튼으로 끌 수 있어요",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Palette.Mist,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onToggle) { Text("울림 확인", color = Palette.SunText) }
         }
     }
 }

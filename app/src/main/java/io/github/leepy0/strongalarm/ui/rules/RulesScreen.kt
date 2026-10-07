@@ -98,12 +98,12 @@ fun RulesScreen(
             }
         }
 
-        Step(1, "날짜별 시각 변경", ring = true) {
+        Step(1, "날짜별 직접 지정", ring = null) {
             Hint(
                 if (state.overrideCount > 0) {
-                    "알람 탭에서 날짜를 눌러 바꿔요. 지금 ${state.overrideCount}일 바꿔뒀어요."
+                    "알람 탭에서 날짜를 눌러 시각을 바꾸거나 쉬는 날로 정해요. 지금 ${state.overrideCount}일 지정했어요."
                 } else {
-                    "알람 탭에서 날짜를 눌러 그날만 시각을 바꿔요."
+                    "알람 탭에서 날짜를 눌러 그날만 시각을 바꾸거나 쉬는 날로 정해요."
                 },
             )
         }
@@ -187,7 +187,8 @@ fun RulesScreen(
 private fun Step(
     order: Int,
     title: String,
-    ring: Boolean,
+    /** 결과 꼬리표. null = 울림·쉼 둘 다 */
+    ring: Boolean?,
     last: Boolean = false,
     content: @Composable () -> Unit,
 ) {
@@ -216,7 +217,13 @@ private fun Step(
             Row(Modifier.height(28.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(title, style = MaterialTheme.typography.titleMedium, color = Palette.Ink)
                 Spacer(Modifier.width(8.dp))
-                OutcomeTag(ring)
+                if (ring != null) {
+                    OutcomeTag(ring)
+                } else {
+                    OutcomeTag(true)
+                    Spacer(Modifier.width(4.dp))
+                    OutcomeTag(false)
+                }
             }
             Spacer(Modifier.height(8.dp))
             content()

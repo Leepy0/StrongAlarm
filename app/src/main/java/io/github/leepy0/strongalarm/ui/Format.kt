@@ -42,6 +42,7 @@ fun agoKo(atMillis: Long, nowMillis: Long): String {
 /** 판정 사유를 사용자 문장으로 */
 fun Judgement.sentence(): String = when (code) {
     ReasonCode.OVERRIDE -> "이 날만 시각을 바꿔뒀어요"
+    ReasonCode.MANUAL_OFF -> "직접 쉬는 날로 정했어요"
     ReasonCode.WORK_EVENT -> "근무 일정이 있어요: $detail"
     ReasonCode.OFF_EVENT -> "휴무 일정이 있어요: $detail"
     ReasonCode.HOLIDAY -> "공휴일이에요: $detail"

@@ -69,6 +69,7 @@ import io.github.leepy0.strongalarm.data.HistoryLog
 import io.github.leepy0.strongalarm.data.Phase
 import io.github.leepy0.strongalarm.data.SessionState
 import io.github.leepy0.strongalarm.data.Stores
+import io.github.leepy0.strongalarm.data.dayLocked
 import io.github.leepy0.strongalarm.lights.LightController
 import io.github.leepy0.strongalarm.lights.SmartThingsAuth
 import io.github.leepy0.strongalarm.lights.SmartThingsClient
@@ -125,7 +126,11 @@ fun Judgement.toCell(s: AppSettings): DayCell {
         code == ReasonCode.OFF_EVENT -> KeywordMatcher.firstHit(s.rule.offKeywords, detail.orEmpty()) ?: "휴무"
         else -> "쉼"
     }
-    return DayCell(date, ring, time, s.overrides.containsKey(date.toString()), label, sentence())
+    return DayCell(
+        date, ring, time, s.overrides.containsKey(date.toString()), label, sentence(),
+        confirmed = ring && s.isConfirmed(date),
+        manualOff = code == ReasonCode.MANUAL_OFF,
+    )
 }
 
 private fun DayOffRule.keywordCount() =
@@ -296,14 +301,34 @@ fun AppRoot(
         }
     }
 
-    fun setOverride(date: LocalDate, time: LocalTime) {
-        val key = date.toString()
-        val old = settings.overrides[key]
-        save { it.copy(overrides = it.overrides + (key to time.toString())) }
-        undoable("${date.pretty()} ${time.hhmm()}에 울려요") {
-            save { it.copy(overrides = if (old == null) it.overrides - key else it.overrides + (key to old)) }
+    /**
+     * 날짜별 지정 변경 + 스낵바 되돌리기 (그 날짜 상태만 복구).
+     * @param guard true면 알람 진행 중(디밍·울림)인 날짜는 막음 — 전날 결정을 아침에 뒤집지 못하게
+     */
+    fun changeDay(date: LocalDate, message: String, guard: Boolean = false, f: (AppSettings) -> AppSettings) {
+        if (guard && Stores.state.get(ctx).dayLocked(date)) {
+            notify("알람이 진행 중이라 바꿀 수 없어요. 걸어서 꺼주세요.")
+            return
         }
+        val before = settings
+        save(f)
+        undoable(message) { save { it.restoreDay(date, before) } }
     }
+
+    fun setOverride(date: LocalDate, time: LocalTime) =
+        changeDay(date, "${date.pretty()} ${time.hhmm()}에 울려요") { it.withTime(date, time) }
+
+    fun skipDay(date: LocalDate) =
+        changeDay(date, "${date.pretty()}은 쉬는 날로 정했어요", guard = true) { it.withSkip(date) }
+
+    fun clearSkip(date: LocalDate) =
+        changeDay(date, "${date.pretty()} 쉬는 날 지정을 취소했어요") { it.withoutSkip(date) }
+
+    fun confirmDay(date: LocalDate) =
+        changeDay(date, "${date.pretty()} 울림 확인 · 걸어야만 꺼져요") { it.withConfirm(date) }
+
+    fun unconfirmDay(date: LocalDate) =
+        changeDay(date, "${date.pretty()} 울림 확인을 취소했어요", guard = true) { it.withoutConfirm(date) }
 
     fun setBaseTime(time: LocalTime) {
         val old = settings.baseTime
@@ -367,13 +392,8 @@ fun AppRoot(
         }
     }
 
-    fun clearOverride(date: LocalDate) {
-        val old = settings.overrides[date.toString()]
-        save { it.copy(overrides = it.overrides - date.toString()) }
-        if (old != null) {
-            undoable("${date.pretty()} 바꾼 시각을 취소했어요") { save { it.copy(overrides = it.overrides + (date.toString() to old)) } }
-        }
-    }
+    fun clearOverride(date: LocalDate) =
+        changeDay(date, "${date.pretty()} 바꾼 시각을 취소했어요") { it.copy(overrides = it.overrides - date.toString()) }
 
     fun changeRule(r: DayOffRule) {
         val old = settings.rule
@@ -503,6 +523,8 @@ fun AppRoot(
                                     time = LocalTime.parse(p.time),
                                     reason = judgements.firstOrNull { it.date == date }?.sentence() ?: p.reason,
                                     ringAt = p.ringAt,
+                                    confirmed = settings.isConfirmed(date),
+                                    locked = appState.dayLocked(date),
                                 )
                             }
                             HomeScreen(
@@ -535,6 +557,9 @@ fun AppRoot(
                                 onOpenRules = { tab = Tab.RULES },
                                 onOpenLights = { sub = Sub.LIGHTS },
                                 onOpenUpdate = { tab = Tab.SETTINGS },
+                                onToggleConfirm = {
+                                    next?.let { n -> if (n.confirmed) unconfirmDay(n.date) else confirmDay(n.date) }
+                                },
                             )
                         }
 
@@ -542,7 +567,7 @@ fun AppRoot(
                             state = RulesUiState(
                                 rule = settings.rule,
                                 calendarNames = calendars.associate { it.id to it.name },
-                                overrideCount = settings.overrides.size,
+                                overrideCount = settings.overrides.size + settings.skips.size,
                                 calendarReadable = calendarReadable,
                             ),
                             onChange = ::changeRule,
@@ -625,6 +650,24 @@ fun AppRoot(
                     },
                     onClearOverride = {
                         clearOverride(cell.date)
+                        sheetDate = null
+                    },
+                    confirmable = appState.next?.date == cell.date.toString(),
+                    locked = appState.dayLocked(cell.date),
+                    onSkip = {
+                        skipDay(cell.date)
+                        sheetDate = null
+                    },
+                    onClearSkip = {
+                        clearSkip(cell.date)
+                        sheetDate = null
+                    },
+                    onConfirm = {
+                        confirmDay(cell.date)
+                        sheetDate = null
+                    },
+                    onUnconfirm = {
+                        unconfirmDay(cell.date)
                         sheetDate = null
                     },
                 )

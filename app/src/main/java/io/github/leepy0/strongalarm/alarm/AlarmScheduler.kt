@@ -27,6 +27,8 @@ object AlarmScheduler {
     const val ACTION_NIGHTLY = "$PKG.NIGHTLY"
     const val ACTION_LIGHTS_OFF = "$PKG.LIGHTS_OFF"
     const val ACTION_FORCE_RING = "$PKG.FORCE_RING"
+    const val ACTION_CONFIRM = "$PKG.CONFIRM"
+    const val ACTION_SKIP = "$PKG.SKIP"
     const val EXTRA_DATE = "date"
 
     private const val REQ_RING = 1
@@ -52,6 +54,7 @@ object AlarmScheduler {
             zone = zone,
             overrideTime = if (useOverride) settings.overrideFor(date) else null,
             cached = cache[date.toString()]?.let { CachedDecision(it.ring, it.reason) },
+            manualOff = useOverride && settings.isSkipped(date),
         )
     }
 
@@ -125,9 +128,15 @@ object AlarmScheduler {
         }
     }
 
+    /** 지난 날짜의 시각 변경·쉬는 날 지정·울림 확인 정리 */
     private fun pruneOverrides(ctx: Context, today: LocalDate) {
+        fun keep(d: String) = runCatching { !LocalDate.parse(d).isBefore(today) }.getOrDefault(false)
         Stores.settings.update(ctx) { s ->
-            s.copy(overrides = s.overrides.filterKeys { runCatching { !LocalDate.parse(it).isBefore(today) }.getOrDefault(false) })
+            s.copy(
+                overrides = s.overrides.filterKeys(::keep),
+                skips = s.skips.filter(::keep).toSet(),
+                confirmed = s.confirmed.filter(::keep).toSet(),
+            )
         }
     }
 

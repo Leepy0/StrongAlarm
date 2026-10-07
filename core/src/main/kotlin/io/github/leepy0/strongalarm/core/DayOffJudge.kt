@@ -13,6 +13,7 @@ object DayOffJudge {
      * @param events 알람 날짜 주변 일정. null이면 캘린더를 읽을 수 없는 상태
      * @param overrideTime 일회성 변경 시각. 있으면 무조건 그 시각에 울림
      * @param cached 캘린더를 읽을 수 없을 때 사용할 이전 판정
+     * @param manualOff 앱에서 직접 쉬는 날로 지정 (일회성 변경과 동시에 존재하지 않음)
      */
     fun judge(
         date: LocalDate,
@@ -22,10 +23,14 @@ object DayOffJudge {
         zone: ZoneId,
         overrideTime: LocalTime? = null,
         cached: CachedDecision? = null,
+        manualOff: Boolean = false,
     ): Judgement {
-        // 0순위: 일회성 변경
+        // 0순위: 날짜별 직접 지정 (시각 변경 = 울림, 쉬는 날 지정 = 쉼). 캘린더와 무관
         if (overrideTime != null) {
             return Judgement(date, true, overrideTime, ReasonCode.OVERRIDE)
+        }
+        if (manualOff) {
+            return Judgement(date, false, baseTime, ReasonCode.MANUAL_OFF)
         }
 
         // 캘린더 확인 불가 → 이전 판정, 없으면 울림 (fail-safe)

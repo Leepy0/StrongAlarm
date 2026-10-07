@@ -92,6 +92,8 @@ class AlarmService : Service() {
     private var watchAcked = false
     private var test = false
     private var goal = 30
+    /** 전날 울림 확인 → 쉬는 날 버튼 무시 */
+    private var restLocked = false
 
     private val vibrator by lazy { getSystemService(VibratorManager::class.java).defaultVibrator }
     private val ctx: Context get() = applicationContext
@@ -213,6 +215,7 @@ class AlarmService : Service() {
         this.test = test
         val settings = Stores.settings.get(ctx)
         goal = settings.stepGoal
+        restLocked = !test && settings.isConfirmed(date)
         ringStartedAt = System.currentTimeMillis()
         dimJob?.cancel()
 
@@ -233,7 +236,9 @@ class AlarmService : Service() {
             }
         }
 
-        AlarmSession.update { UiState(phase = UiPhase.RINGING, goal = goal, reason = reason, test = test) }
+        AlarmSession.update {
+            UiState(phase = UiPhase.RINGING, goal = goal, reason = reason, test = test, restLocked = restLocked)
+        }
         try {
             startForeground(Notifications.ID_RING, Notifications.ringing(this, "걸음 0 / $goal"), FGS_TYPE)
         } catch (e: Exception) {
@@ -280,7 +285,7 @@ class AlarmService : Service() {
                 log("${lights.switchDelayMinutes}분 미해제 → 스위치 점등")
             }
         }
-        log("울림 시작 — $reason")
+        log("울림 시작 — $reason" + if (restLocked) " (전날 확인: 쉬는 날 버튼 잠금)" else "")
     }
 
     private fun startVibration() {
@@ -358,7 +363,7 @@ class AlarmService : Service() {
 
     /** 휴무 버튼을 누르는 동안 소리·진동 일시정지 */
     private fun pause() {
-        if (mode != Mode.RINGING) return
+        if (mode != Mode.RINGING || restLocked) return
         mode = Mode.PAUSED
         sound?.pause()
         runCatching { vibrator.cancel() }
@@ -376,7 +381,12 @@ class AlarmService : Service() {
     }
 
     private fun holiday() {
-        if (mode == Mode.RINGING || mode == Mode.PAUSED) dismiss(byHoliday = true)
+        if (mode != Mode.RINGING && mode != Mode.PAUSED) return
+        if (restLocked) {
+            log("확인된 알람이라 쉬는 날 버튼 무시")
+            return
+        }
+        dismiss(byHoliday = true)
     }
 
     // ───────── 종료 ─────────

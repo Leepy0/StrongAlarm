@@ -150,4 +150,12 @@ class DayOffJudgeTest {
     @Test fun keywordMatcherReturnsNullForNoHit() {
         assertNull(KeywordMatcher.firstHit(listOf("연차"), "회의"))
     }
+
+    @Test fun manualOffBeatsWorkEvent() {
+        // 특근 일정이 있어도 직접 쉬는 날로 지정하면 쉼, 캘린더를 못 읽어도 쉼
+        val j = DayOffJudge.judge(thu, seven, rule, listOf(allDay("특근", 1, thu)), zone, manualOff = true)
+        assertEquals(false, j.ring)
+        assertEquals(ReasonCode.MANUAL_OFF, j.code)
+        assertEquals(false, DayOffJudge.judge(thu, seven, rule, null, zone, manualOff = true).ring)
+    }
 }

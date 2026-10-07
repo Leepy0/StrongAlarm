@@ -36,6 +36,10 @@ data class AppSettings(
     val alarmMinute: Int = 0,
     /** 일회성 변경: "2026-10-02" → "06:30". 해당 날짜는 판정과 무관하게 그 시각에 울림 */
     val overrides: Map<String, String> = emptyMap(),
+    /** 직접 쉬는 날로 지정한 날짜. overrides와 겹치지 않음 */
+    val skips: Set<String> = emptySet(),
+    /** 전날 '울림 확인'한 날짜 → 그날 알람은 쉬는 날 버튼 없이 걸어야만 꺼짐 */
+    val confirmed: Set<String> = emptySet(),
     val rule: DayOffRule = DayOffRule(),
     val stepGoal: Int = 30,
     /** 알람 크기 % (10~100). 처음부터 이 크기로 고정 */
@@ -50,7 +54,42 @@ data class AppSettings(
 
     fun overrideFor(date: LocalDate): LocalTime? =
         overrides[date.toString()]?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+
+    fun isSkipped(date: LocalDate) = date.toString() in skips
+    fun isConfirmed(date: LocalDate) = date.toString() in confirmed
+
+    // ── 날짜별 지정 변경 (서로 겹치지 않게 정리) ──
+
+    /** 그날만 시각 변경 = 울림. 쉬는 날 지정은 해제 */
+    fun withTime(date: LocalDate, time: LocalTime) =
+        copy(overrides = overrides + (date.toString() to time.toString()), skips = skips - date.toString())
+
+    /** 쉬는 날로 지정. 시각 변경·울림 확인은 해제 */
+    fun withSkip(date: LocalDate) = date.toString().let {
+        copy(skips = skips + it, overrides = overrides - it, confirmed = confirmed - it)
+    }
+
+    fun withoutSkip(date: LocalDate) = copy(skips = skips - date.toString())
+    fun withConfirm(date: LocalDate) = copy(confirmed = confirmed + date.toString())
+    fun withoutConfirm(date: LocalDate) = copy(confirmed = confirmed - date.toString())
+
+    /** 되돌리기: 그 날짜의 지정 상태만 이전 값으로 (다른 날짜·설정은 유지) */
+    fun restoreDay(date: LocalDate, from: AppSettings): AppSettings {
+        val k = date.toString()
+        return copy(
+            overrides = from.overrides[k]?.let { overrides + (k to it) } ?: (overrides - k),
+            skips = if (k in from.skips) skips + k else skips - k,
+            confirmed = if (k in from.confirmed) confirmed + k else confirmed - k,
+        )
+    }
 }
+
+/**
+ * 디밍·울림이 진행 중인 날짜는 쉬는 날 지정·확인 취소를 막음
+ * (아침의 내가 전날 밤의 결정을 뒤집지 못하게)
+ */
+fun AppState.dayLocked(date: LocalDate): Boolean =
+    session?.let { it.date == date.toString() && it.phase != Phase.DONE } == true
 
 @Serializable
 data class CachedEntry(val ring: Boolean, val reason: String)

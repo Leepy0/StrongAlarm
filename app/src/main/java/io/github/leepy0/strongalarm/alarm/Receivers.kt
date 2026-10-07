@@ -6,6 +6,7 @@ import android.content.Intent
 import io.github.leepy0.strongalarm.data.HistoryLog
 import io.github.leepy0.strongalarm.data.Phase
 import io.github.leepy0.strongalarm.data.Stores
+import io.github.leepy0.strongalarm.data.dayLocked
 import io.github.leepy0.strongalarm.lights.LightController
 import io.github.leepy0.strongalarm.update.Updater
 import kotlinx.coroutines.CoroutineScope
@@ -43,8 +44,29 @@ class AlarmReceiver : BroadcastReceiver() {
             AlarmScheduler.ACTION_FORCE_RING -> goAsyncWork {
                 val d = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@goAsyncWork
                 val base = Stores.settings.get(ctx).baseTime
-                Stores.settings.update(ctx) { it.copy(overrides = it.overrides + (d.toString() to base.toString())) }
+                Stores.settings.update(ctx) { it.withTime(d, base) }
                 HistoryLog.add(ctx, "그래도 울리기: $d $base")
+                AlarmScheduler.rescheduleAll(ctx)
+                Notifications.showNightly(ctx, AlarmScheduler.judge(ctx, d))
+            }
+
+            // 23시 안내 [울림 확인]: 그날 알람은 쉬는 날 버튼 잠금
+            AlarmScheduler.ACTION_CONFIRM -> goAsyncWork {
+                val d = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@goAsyncWork
+                Stores.settings.update(ctx) { it.withConfirm(d) }
+                HistoryLog.add(ctx, "울림 확인: $d (쉬는 날 버튼 잠금)")
+                Notifications.showNightly(ctx, AlarmScheduler.judge(ctx, d))
+            }
+
+            // 23시 안내 [쉬는 날로]. 알람이 진행 중인 날짜면 무시
+            AlarmScheduler.ACTION_SKIP -> goAsyncWork {
+                val d = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@goAsyncWork
+                if (Stores.state.get(ctx).dayLocked(d)) {
+                    HistoryLog.add(ctx, "쉬는 날 지정 무시: $d 알람 진행 중")
+                    return@goAsyncWork
+                }
+                Stores.settings.update(ctx) { it.withSkip(d) }
+                HistoryLog.add(ctx, "쉬는 날로 지정: $d")
                 AlarmScheduler.rescheduleAll(ctx)
                 Notifications.showNightly(ctx, AlarmScheduler.judge(ctx, d))
             }

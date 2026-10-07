@@ -72,6 +72,7 @@ private fun AlarmRoute(onFinish: () -> Unit) {
             watchNodes = ui.watchNodes,
             goal = ui.goal,
             paused = ui.phase == UiPhase.PAUSED,
+            restLocked = ui.restLocked,
             sensorNote = listOfNotNull(
                 ui.phoneSensorProblem?.let { "폰: $it" },
                 ui.watchSensorProblem?.let { "워치: $it" },

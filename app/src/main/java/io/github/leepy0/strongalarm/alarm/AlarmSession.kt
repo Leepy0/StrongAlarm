@@ -20,6 +20,8 @@ object AlarmSession {
         val watchSensorProblem: String? = null,
         val reason: String = "",
         val test: Boolean = false,
+        /** 전날 울림 확인한 알람: 쉬는 날 버튼 없음, 걸어야만 꺼짐 */
+        val restLocked: Boolean = false,
     ) {
         val steps get() = maxOf(phoneSteps, watchSteps)
     }

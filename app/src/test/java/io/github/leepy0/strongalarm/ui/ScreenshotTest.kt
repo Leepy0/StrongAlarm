@@ -209,6 +209,7 @@ class ScreenshotTest {
     @Test fun homeProblems() = shot("16_home_problems") {
         Home(
             home.copy(
+                next = home.next?.copy(confirmed = true),
                 readiness = home.readiness.copy(
                     missingPermissions = 0,
                     lastCheckCalendarOk = false,
@@ -243,6 +244,16 @@ class ScreenshotTest {
             ),
             {}, {}, {}, {}, {}, {}, {}, {}, {}, {},
         )
+    }
+
+    @Test fun daySheetConfirm() = shot("19_day_sheet_confirm") {
+        Box(Modifier.background(Palette.Dusk).padding(top = 24.dp)) {
+            DaySheetContent(days[1], seven, {}, {}, {}, confirmable = true)
+        }
+    }
+
+    @Test fun alarmLocked() = shot("20_alarm_locked") {
+        AlarmScreen(AlarmUiState(LocalTime.of(7, 1), "평일이에요", false, 12, 9, 1, 30, false, restLocked = true), {}, {}, {})
     }
 
     @Test fun alarmPaused() = shot("12_alarm_paused") {

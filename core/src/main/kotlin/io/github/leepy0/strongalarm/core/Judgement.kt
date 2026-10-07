@@ -14,6 +14,8 @@ data class CalendarEvent(
 
 enum class ReasonCode {
     OVERRIDE,
+    /** 앱에서 그날을 직접 쉬는 날로 지정 */
+    MANUAL_OFF,
     WORK_EVENT,
     OFF_EVENT,
     HOLIDAY,
@@ -35,6 +37,7 @@ data class Judgement(
 ) {
     fun describe(): String = when (code) {
         ReasonCode.OVERRIDE -> "일회성 변경 $time"
+        ReasonCode.MANUAL_OFF -> "직접 쉬는 날로 지정"
         ReasonCode.WORK_EVENT -> "근무 일정: $detail"
         ReasonCode.OFF_EVENT -> "휴무 일정: $detail"
         ReasonCode.HOLIDAY -> "공휴일: $detail"
