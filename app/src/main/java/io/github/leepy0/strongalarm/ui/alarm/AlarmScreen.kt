@@ -6,8 +6,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -147,30 +147,25 @@ private fun StepRing(steps: Int, goal: Int) {
     }
 }
 
-/** 전날 밤 울림을 확인한 알람: 쉬는 날 버튼 자리에 이유만 표시 (누를 수 있는 요소 없음) */
+/** 전날 울림을 확인한 알람: 쉬는 날 버튼 자리에 이유만 표시 (버튼처럼 보이지 않게 테두리 없는 글자) */
 @Composable
 private fun RestLocked() {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(64.dp)
-                .clip(CircleShape)
-                .border(1.dp, Palette.Line, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                "어젯밤 울림을 확인했어요",
-                style = MaterialTheme.typography.titleMedium,
-                color = Palette.Mist,
-                textAlign = TextAlign.Center,
-            )
-        }
+    Column(
+        Modifier.fillMaxWidth().height(64.dp + 28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text(
+            "전날 울림을 확인한 알람이에요",
+            style = MaterialTheme.typography.titleMedium,
+            color = Palette.Ink,
+            textAlign = TextAlign.Center,
+        )
         Text(
             "쉬는 날 버튼 없이 걸어야만 꺼져요",
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodyMedium,
             color = Palette.Mist,
-            modifier = Modifier.padding(top = 12.dp),
+            modifier = Modifier.padding(top = 4.dp),
         )
     }
 }
