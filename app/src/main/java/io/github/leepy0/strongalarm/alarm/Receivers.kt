@@ -10,6 +10,7 @@ import io.github.leepy0.strongalarm.data.Phase
 import io.github.leepy0.strongalarm.data.Stores
 import io.github.leepy0.strongalarm.data.dayLocked
 import io.github.leepy0.strongalarm.lights.LightController
+import io.github.leepy0.strongalarm.ui.pretty
 import io.github.leepy0.strongalarm.update.ApkDownloads
 import io.github.leepy0.strongalarm.update.Updater
 import kotlinx.coroutines.CoroutineScope
@@ -63,6 +64,29 @@ class AlarmReceiver : BroadcastReceiver() {
                 Stores.settings.update(ctx) { it.withConfirm(d) }
                 HistoryLog.add(ctx, "울림 확인: $d (쉬는 날 버튼 잠금)")
                 Notifications.showNightly(ctx, AlarmScheduler.judge(ctx, d))
+            }
+
+            // 연속 휴무 일정 [안 울려도 돼요] / [그래도 울리기]. 알람이 진행 중인 날짜는 건너뜀
+            AlarmScheduler.ACTION_CONFIRM_OFF, AlarmScheduler.ACTION_RING_OFF -> goAsyncWork {
+                val st = Stores.state.get(ctx)
+                val dates = intent.getStringExtra(AlarmScheduler.EXTRA_DATES).orEmpty().split(',')
+                    .mapNotNull { runCatching { LocalDate.parse(it.trim()) }.getOrNull() }
+                    .filter { !it.isBefore(LocalDate.now()) && !st.dayLocked(it) }
+                if (dates.isEmpty()) {
+                    HistoryLog.add(ctx, "연속 휴무 확인 무시: 날짜가 지났거나 알람 진행 중")
+                    return@goAsyncWork
+                }
+                val confirmOff = intent.action == AlarmScheduler.ACTION_CONFIRM_OFF
+                Stores.settings.update(ctx) { s ->
+                    if (confirmOff) s.withConfirmedOff(dates) else dates.fold(s) { acc, d -> acc.withTime(d, acc.baseTime) }
+                }
+                val span = "${dates.min().pretty()}~${dates.max().pretty()}"
+                HistoryLog.add(ctx, if (confirmOff) "연속 휴무 확인: $span 안 울림" else "연속 휴무 일정에도 울리기: $span")
+                ctx.getSystemService(android.app.NotificationManager::class.java).cancel(Notifications.ID_OFF_STREAK)
+                AlarmScheduler.rescheduleAll(ctx)
+                if (intent.getBooleanExtra(AlarmScheduler.EXTRA_FROM_NIGHTLY, false)) {
+                    Notifications.showNightly(ctx, AlarmScheduler.judge(ctx, dates.min()))
+                }
             }
 
             // 23시 안내 [쉬는 날로]. 알람이 진행 중인 날짜면 무시

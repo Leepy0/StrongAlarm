@@ -23,6 +23,7 @@ import io.github.leepy0.strongalarm.ui.home.DaySheetContent
 import io.github.leepy0.strongalarm.ui.home.HomeScreen
 import io.github.leepy0.strongalarm.ui.home.HomeUiState
 import io.github.leepy0.strongalarm.ui.home.NextAlarm
+import io.github.leepy0.strongalarm.ui.home.PendingStreak
 import io.github.leepy0.strongalarm.ui.home.Readiness
 import io.github.leepy0.strongalarm.ui.rules.RulesScreen
 import io.github.leepy0.strongalarm.ui.rules.RulesUiState
@@ -281,6 +282,22 @@ class ScreenshotTest {
     }
 
     @Test fun homeLoading() = shot("25_home_loading") { Home(home.copy(days = emptyList(), next = null)) }
+
+    /** 연속 휴무 일정(10/13 화 ~ 10/15 목 제주 여행) 확인 전: 카드로 묻고, 그 날들은 '미확인'으로 울림 */
+    private val tripDays = days.mapIndexed { i, d ->
+        if (i in 6..8) d.copy(ring = true, time = seven, overridden = false, label = "미확인", reason = "연속 휴무 일정을 아직 확인하지 않아 울려요: 제주 여행", pendingOff = true) else d
+    }
+    private val trip = PendingStreak(today.plusDays(6), today.plusDays(8), (6L..8L).map { today.plusDays(it) }, listOf("제주 여행"))
+
+    @Test fun homePendingOff() = shot("26_home_pending_off") {
+        Home(home.copy(days = tripDays, pendingOff = listOf(trip), readiness = home.readiness.copy(missingPermissions = 0)))
+    }
+
+    @Test fun daySheetPendingOff() = shot("27_day_sheet_pending_off") {
+        Box(Modifier.background(Palette.Dusk).padding(top = 24.dp)) {
+            DaySheetContent(tripDays[6], seven, {}, {}, {}, pendingStreakDays = 3)
+        }
+    }
 
     @Config(qualifiers = "w720dp-h800dp-xxhdpi")
     @Test fun homeWide() = shot("13_home_wide") { Home(home) }

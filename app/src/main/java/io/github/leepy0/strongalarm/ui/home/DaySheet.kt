@@ -28,9 +28,11 @@ import java.time.LocalTime
 /**
  * 날짜를 눌렀을 때: 판정 결과 + 그날만 바꾸기. 주요 행동은 1개만 채움 버튼
  * - 울리는 날: (다음 알람이면) 울림 확인 / 시각 변경 / 쉬는 날로
+ * - 연속 휴무 일정 확인 전인 날: 안 울려도 돼요(일정 전체) 가 먼저
  * - 쉬는 날: 울리기 / 다른 시각 / (직접 지정했으면) 지정 취소
  * @param confirmable 다음 알람 날짜라 울림 확인 가능
  * @param locked 알람이 진행 중이라 쉬는 날 지정·확인 취소 불가
+ * @param pendingStreakDays 이 날이 속한 연속 휴무 일정의 길이 (버튼 문구용)
  */
 @Composable
 fun DaySheetContent(
@@ -45,6 +47,8 @@ fun DaySheetContent(
     onClearSkip: () -> Unit = {},
     onConfirm: () -> Unit = {},
     onUnconfirm: () -> Unit = {},
+    pendingStreakDays: Int = 0,
+    onConfirmOff: () -> Unit = {},
 ) {
     val sunButton = ButtonDefaults.buttonColors(containerColor = Palette.Sun, contentColor = Palette.SunInk)
     Column(Modifier.fillMaxWidth().padding(horizontal = ScreenPadding).padding(bottom = 32.dp)) {
@@ -80,13 +84,23 @@ fun DaySheetContent(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (day.ring) {
                 val showConfirm = confirmable && !day.confirmed
+                if (day.pendingOff) {
+                    Button(
+                        onClick = onConfirmOff,
+                        enabled = !locked,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Palette.MoonSoft, contentColor = Palette.Moon),
+                    ) {
+                        Text(if (pendingStreakDays > 1) "안 울려도 돼요 (연속 ${pendingStreakDays}일 모두)" else "안 울려도 돼요")
+                    }
+                }
                 if (showConfirm) {
                     Button(onClick = onConfirm, modifier = Modifier.fillMaxWidth(), colors = sunButton) {
                         Text("울림 확인 (아침에 못 끄게)")
                     }
                 }
                 val timeLabel = if (day.overridden) "시각 다시 바꾸기" else "이 날만 다른 시각으로"
-                if (showConfirm) {
+                if (showConfirm || day.pendingOff) {
                     OutlinedButton(onClick = onPickTime, modifier = Modifier.fillMaxWidth()) { Text(timeLabel, color = Palette.Ink) }
                 } else {
                     Button(onClick = onPickTime, modifier = Modifier.fillMaxWidth(), colors = sunButton) { Text(timeLabel) }

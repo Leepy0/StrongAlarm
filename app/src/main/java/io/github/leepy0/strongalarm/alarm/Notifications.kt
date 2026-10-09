@@ -9,6 +9,8 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import io.github.leepy0.strongalarm.core.Judgement
+import io.github.leepy0.strongalarm.core.ReasonCode
+import io.github.leepy0.strongalarm.data.PendingOffStreak
 import io.github.leepy0.strongalarm.data.Stores
 import io.github.leepy0.strongalarm.ui.AlarmActivity
 import io.github.leepy0.strongalarm.ui.MainActivity
@@ -20,12 +22,14 @@ object Notifications {
     const val CH_PREP = "alarm_prep"
     const val CH_NIGHTLY = "nightly"
     const val CH_UPDATE = "update"
+    const val CH_OFF_STREAK = "off_streak"
 
     const val ID_PREP = 1001
     const val ID_RING = 1002
     const val ID_NIGHTLY = 1003
     const val ID_UPDATE = 1004
     const val ID_FULL_SCREEN = 1005
+    const val ID_OFF_STREAK = 1006
 
     fun createChannels(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
@@ -40,6 +44,7 @@ object Notifications {
                 NotificationChannel(CH_PREP, "알람 준비 (조명 디밍)", NotificationManager.IMPORTANCE_LOW),
                 NotificationChannel(CH_NIGHTLY, "내일 알람 안내", NotificationManager.IMPORTANCE_DEFAULT),
                 NotificationChannel(CH_UPDATE, "새 버전 안내", NotificationManager.IMPORTANCE_DEFAULT),
+                NotificationChannel(CH_OFF_STREAK, "연속 휴무 일정 확인", NotificationManager.IMPORTANCE_DEFAULT),
             ),
         )
     }
@@ -74,18 +79,27 @@ object Notifications {
     /**
      * 23시 안내: 내일 울림 여부 + 사유.
      * 울리는 날: [울림 확인] [쉬는 날로] [시각 변경] — 확인하면 그날은 쉬는 날 버튼 없이 걸어야만 꺼짐
+     * 연속 휴무 일정 확인 전: [울림 확인] [안 울려도 돼요] [시각 변경] — 확인하면 그 일정의 날들은 쉼
      * 쉬는 날: [그래도 울리기] [시각 변경]
      */
     fun showNightly(ctx: Context, j: Judgement) {
         val confirmed = j.ring && Stores.settings.get(ctx).isConfirmed(j.date)
+        // 연속 휴무 일정 확인 전인 날이면 그 묶음 전체를 한 번에 확인할 수 있게
+        val streak = if (j.code == ReasonCode.OFF_UNCONFIRMED) {
+            Stores.state.get(ctx).pendingOff.firstOrNull { j.date.toString() in it.pending }
+        } else {
+            null
+        }
         val title = when {
             !j.ring -> "내일 알람 없음"
             confirmed -> "내일 ${j.time} 알람 · 확인됨"
+            streak != null -> "내일 ${j.time} 알람 · 연속 휴무 일정 확인 전"
             else -> "내일 ${j.time} 알람, 울려도 될까요?"
         }
         val base = when {
             !j.ring -> "${j.date.pretty()} · ${j.describe()}"
             confirmed -> "${j.date.pretty()} · ${j.describe()}. 쉬는 날 버튼 없이 걸어야만 꺼져요."
+            streak != null -> "${streak.describe()} 동안 안 울려도 되면 확인해주세요. 확인 전엔 평일처럼 울려요."
             else -> "${j.date.pretty()} · ${j.describe()}. 확인하면 아침에 쉬는 날 버튼으로 끌 수 없어요."
         }
         // 울리는 날인데 전체 화면 알림이 꺼져 있으면 경고 (업데이트 후 시스템이 끄는 경우)
@@ -112,7 +126,11 @@ object Notifications {
         fun action(label: String, pi: PendingIntent) = builder.addAction(Notification.Action.Builder(null, label, pi).build())
         if (j.ring) {
             if (!confirmed) action("울림 확인", broadcast(22, AlarmScheduler.ACTION_CONFIRM))
-            action("쉬는 날로", broadcast(23, AlarmScheduler.ACTION_SKIP))
+            if (streak != null) {
+                action("안 울려도 돼요", offStreakIntent(ctx, 24, AlarmScheduler.ACTION_CONFIRM_OFF, streak, fromNightly = true))
+            } else {
+                action("쉬는 날로", broadcast(23, AlarmScheduler.ACTION_SKIP))
+            }
         } else {
             action("그래도 울리기", broadcast(21, AlarmScheduler.ACTION_FORCE_RING))
         }
@@ -121,6 +139,34 @@ object Notifications {
     }
 
     fun canFullScreen(ctx: Context) = ctx.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+
+    /**
+     * 연속 휴무 일정을 찾았을 때: 안 울려도 되는지 확인. 확인 전엔 그 날들이 평일처럼 울림
+     * [안 울려도 돼요] → 그 날들 쉼, [그래도 울리기] → 그 날들 매일 시각으로 울림(날짜별 지정)
+     */
+    fun showOffStreak(ctx: Context, s: PendingOffStreak) {
+        val text = "${s.describe()} 동안 안 울려도 될까요? 확인 전엔 평일처럼 울려요."
+        val n = Notification.Builder(ctx, CH_OFF_STREAK)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentTitle("연속 휴무 일정, 안 울려도 될까요?")
+            .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .setContentIntent(mainIntent(ctx))
+            .addAction(Notification.Action.Builder(null, "안 울려도 돼요", offStreakIntent(ctx, 50, AlarmScheduler.ACTION_CONFIRM_OFF, s)).build())
+            .addAction(Notification.Action.Builder(null, "그래도 울리기", offStreakIntent(ctx, 51, AlarmScheduler.ACTION_RING_OFF, s)).build())
+            .build()
+        ctx.getSystemService(NotificationManager::class.java).notify(ID_OFF_STREAK, n)
+    }
+
+    private fun offStreakIntent(ctx: Context, req: Int, action: String, s: PendingOffStreak, fromNightly: Boolean = false) =
+        PendingIntent.getBroadcast(
+            ctx, req,
+            Intent(ctx, AlarmReceiver::class.java).setAction(action)
+                .putExtra(AlarmScheduler.EXTRA_DATES, s.pending.joinToString(","))
+                .putExtra(AlarmScheduler.EXTRA_FROM_NIGHTLY, fromNightly),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     /** 업데이트 후 전체 화면 알림 권한이 꺼졌을 때: 누르면 해당 설정 화면 */
     fun showFullScreenLost(ctx: Context) {

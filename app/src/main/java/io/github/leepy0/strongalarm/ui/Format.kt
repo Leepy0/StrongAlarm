@@ -45,6 +45,7 @@ fun Judgement.sentence(): String = when (code) {
     ReasonCode.MANUAL_OFF -> "직접 쉬는 날로 정했어요"
     ReasonCode.WORK_EVENT -> "근무 일정이 있어요: $detail"
     ReasonCode.OFF_EVENT -> "휴무 일정이 있어요: $detail"
+    ReasonCode.OFF_UNCONFIRMED -> "연속 휴무 일정을 아직 확인하지 않아 울려요: $detail"
     ReasonCode.HOLIDAY -> "공휴일이에요: $detail"
     ReasonCode.WEEKEND -> "주말이에요"
     ReasonCode.WEEKDAY -> "평일이에요"

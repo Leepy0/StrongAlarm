@@ -1,6 +1,7 @@
 package io.github.leepy0.strongalarm.alarm
 
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -8,10 +9,13 @@ import io.github.leepy0.strongalarm.core.AlarmPlanner
 import io.github.leepy0.strongalarm.core.CachedDecision
 import io.github.leepy0.strongalarm.core.DayOffJudge
 import io.github.leepy0.strongalarm.core.Judgement
+import io.github.leepy0.strongalarm.core.OffStreak
+import io.github.leepy0.strongalarm.core.OffStreaks
 import io.github.leepy0.strongalarm.data.CachedEntry
 import io.github.leepy0.strongalarm.data.CalendarReader
 import io.github.leepy0.strongalarm.data.HistoryLog
 import io.github.leepy0.strongalarm.data.NextPlan
+import io.github.leepy0.strongalarm.data.PendingOffStreak
 import io.github.leepy0.strongalarm.data.Stores
 import io.github.leepy0.strongalarm.ui.MainActivity
 import io.github.leepy0.strongalarm.update.UpdateJob
@@ -29,7 +33,13 @@ object AlarmScheduler {
     const val ACTION_FORCE_RING = "$PKG.FORCE_RING"
     const val ACTION_CONFIRM = "$PKG.CONFIRM"
     const val ACTION_SKIP = "$PKG.SKIP"
+    /** 연속 휴무 일정 [안 울려도 돼요] / [그래도 울리기] — EXTRA_DATES에 날짜들 */
+    const val ACTION_CONFIRM_OFF = "$PKG.CONFIRM_OFF"
+    const val ACTION_RING_OFF = "$PKG.RING_OFF"
     const val EXTRA_DATE = "date"
+    const val EXTRA_DATES = "dates"
+    /** 23시 안내의 버튼에서 왔으면 처리 후 안내를 갱신 */
+    const val EXTRA_FROM_NIGHTLY = "from_nightly"
     const val EXTRA_RETRY = "retry"
 
     private const val REQ_RING = 1
@@ -41,14 +51,19 @@ object AlarmScheduler {
 
     private const val PLAN_DAYS = 62
 
+    /** 연속 휴무 일정은 요청 범위 바깥까지 이어질 수 있어 앞뒤로 이만큼 넓혀 판정 */
+    private const val LOOKAROUND = 7L
+
     /** 판정에 필요한 입력. 캘린더는 범위 전체를 한 번만 조회 */
     private class JudgeInput(ctx: Context, from: LocalDate, days: Int) {
         val settings = Stores.settings.get(ctx)
         val zone: ZoneId = ZoneId.systemDefault()
-        val events = CalendarReader.readEvents(ctx, from, from.plusDays(days.toLong()), zone)
+        private val rangeStart = from.minusDays(LOOKAROUND)
+        private val rangeEnd = from.plusDays(days + LOOKAROUND)
+        val events = CalendarReader.readEvents(ctx, rangeStart, rangeEnd, zone)
         val cache = Stores.state.get(ctx).cache
 
-        fun judge(date: LocalDate, useOverride: Boolean = true): Judgement = DayOffJudge.judge(
+        private fun base(date: LocalDate, useOverride: Boolean, offNeedsConfirm: Boolean): Judgement = DayOffJudge.judge(
             date = date,
             baseTime = settings.baseTime,
             rule = settings.rule,
@@ -57,7 +72,34 @@ object AlarmScheduler {
             overrideTime = if (useOverride) settings.overrideFor(date) else null,
             cached = cache[date.toString()]?.let { CachedDecision(it.ring, it.reason) },
             manualOff = useOverride && settings.isSkipped(date),
+            offNeedsConfirm = offNeedsConfirm,
         )
+
+        /** 범위 안의 연속 휴무 일정 묶음 (확인 여부와 무관). 캘린더를 못 읽으면 없음 — 캐시에 이미 반영돼 있음 */
+        val streaks: List<OffStreak> by lazy {
+            if (events == null) return@lazy emptyList()
+            val all = generateSequence(rangeStart) { it.plusDays(1) }
+                .takeWhile { !it.isAfter(rangeEnd) }
+                .map { base(it, useOverride = true, offNeedsConfirm = false) }
+                .toList()
+            OffStreaks.find(all)
+        }
+
+        /** 아직 '안 울려도 돼요' 확인을 받지 않아 평일처럼 울려야 하는 날짜 */
+        val unconfirmed: Set<LocalDate> by lazy { OffStreaks.pendingDates(streaks, settings.confirmedOffDates) }
+
+        fun judge(date: LocalDate, useOverride: Boolean = true): Judgement =
+            base(date, useOverride, offNeedsConfirm = date in unconfirmed)
+
+        /** 확인이 남은 묶음만, 지난 날짜는 제외 */
+        fun pendingStreaks(today: LocalDate): List<PendingOffStreak> = streaks.mapNotNull { s ->
+            val pending = s.pending(settings.confirmedOffDates).filter { !it.isBefore(today) }
+            if (pending.isEmpty()) {
+                null
+            } else {
+                PendingOffStreak(s.start.toString(), s.end.toString(), pending.map { it.toString() }, s.titles)
+            }
+        }
     }
 
     fun judgeFunction(ctx: Context, from: LocalDate, days: Int): (LocalDate) -> Judgement {
@@ -79,6 +121,7 @@ object AlarmScheduler {
         pruneOverrides(ctx, today)
         val input = JudgeInput(ctx, today, PLAN_DAYS + 1)
         updateCache(ctx, today, input)
+        updatePendingOff(ctx, today, input)
 
         am.cancel(pending(ctx, ACTION_RING, REQ_RING, null))
         am.cancel(pending(ctx, ACTION_PRE, REQ_PRE, null))
@@ -130,7 +173,27 @@ object AlarmScheduler {
         }
     }
 
-    /** 지난 날짜의 시각 변경·쉬는 날 지정·울림 확인 정리 */
+    /**
+     * 연속 휴무 일정 중 확인이 남은 것을 상태에 저장하고, 새로 생긴 날짜가 있으면 알림으로 물어봄.
+     * 캘린더를 못 읽은 경우는 이전 상태 유지
+     */
+    private fun updatePendingOff(ctx: Context, today: LocalDate, input: JudgeInput) {
+        if (input.events == null) return
+        val pending = input.pendingStreaks(today)
+        val pendingDates = pending.flatMap { it.pending }.toSet()
+        val asked = Stores.state.get(ctx).pendingOffAsked
+        val fresh = pending.firstOrNull { s -> s.pending.any { it !in asked } }
+        // 물어본 날짜 = 지금 확인이 남은 날짜 (지난 날짜·답한 날짜는 자연히 빠짐)
+        Stores.state.update(ctx) { it.copy(pendingOff = pending, pendingOffAsked = pendingDates) }
+        if (fresh != null) {
+            Notifications.showOffStreak(ctx, fresh)
+            HistoryLog.add(ctx, "연속 휴무 일정 확인 요청: ${fresh.describe()} — 확인 전엔 울림")
+        } else if (pending.isEmpty()) {
+            ctx.getSystemService(NotificationManager::class.java).cancel(Notifications.ID_OFF_STREAK)
+        }
+    }
+
+    /** 지난 날짜의 시각 변경·쉬는 날 지정·울림 확인·연속 휴무 확인 정리 */
     private fun pruneOverrides(ctx: Context, today: LocalDate) {
         fun keep(d: String) = runCatching { !LocalDate.parse(d).isBefore(today) }.getOrDefault(false)
         Stores.settings.update(ctx) { s ->
@@ -138,6 +201,7 @@ object AlarmScheduler {
                 overrides = s.overrides.filterKeys(::keep),
                 skips = s.skips.filter(::keep).toSet(),
                 confirmed = s.confirmed.filter(::keep).toSet(),
+                confirmedOff = s.confirmedOff.filter(::keep).toSet(),
             )
         }
     }
