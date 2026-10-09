@@ -1,6 +1,7 @@
 package io.github.leepy0.strongalarm.data
 
 import io.github.leepy0.strongalarm.core.DayOffRule
+import io.github.leepy0.strongalarm.ui.pretty
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
 import java.time.LocalTime
@@ -40,6 +41,8 @@ data class AppSettings(
     val skips: Set<String> = emptySet(),
     /** 전날 '울림 확인'한 날짜 → 그날 알람은 쉬는 날 버튼 없이 걸어야만 꺼짐 */
     val confirmed: Set<String> = emptySet(),
+    /** 연속 휴무 일정에서 '안 울려도 돼요'로 확인한 날짜. 확인 전엔 평일처럼 울림 */
+    val confirmedOff: Set<String> = emptySet(),
     val rule: DayOffRule = DayOffRule(),
     val stepGoal: Int = 30,
     /** 알람 크기 % (10~100). 처음부터 이 크기로 고정 */
@@ -57,6 +60,8 @@ data class AppSettings(
 
     fun isSkipped(date: LocalDate) = date.toString() in skips
     fun isConfirmed(date: LocalDate) = date.toString() in confirmed
+    val confirmedOffDates: Set<LocalDate>
+        get() = confirmedOff.mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }.toSet()
 
     // ── 날짜별 지정 변경 (서로 겹치지 않게 정리) ──
 
@@ -70,6 +75,14 @@ data class AppSettings(
     }
 
     fun withoutSkip(date: LocalDate) = copy(skips = skips - date.toString())
+
+    /** 연속 휴무 일정 확인: 그 날들은 안 울려도 됨. 같은 날의 시각 변경은 해제 (쉬는 게 목적이므로) */
+    fun withConfirmedOff(dates: Collection<LocalDate>) = dates.map { it.toString() }.let { keys ->
+        copy(confirmedOff = confirmedOff + keys, overrides = overrides - keys.toSet())
+    }
+
+    fun withoutConfirmedOff(dates: Collection<LocalDate>) =
+        copy(confirmedOff = confirmedOff - dates.map { it.toString() }.toSet())
     /** 울림 확인. 쉬는 날 지정과 겹치지 않게 지정 해제 */
     fun withConfirm(date: LocalDate) = copy(confirmed = confirmed + date.toString(), skips = skips - date.toString())
     fun withoutConfirm(date: LocalDate) = copy(confirmed = confirmed - date.toString())
@@ -81,6 +94,7 @@ data class AppSettings(
             overrides = from.overrides[k]?.let { overrides + (k to it) } ?: (overrides - k),
             skips = if (k in from.skips) skips + k else skips - k,
             confirmed = if (k in from.confirmed) confirmed + k else confirmed - k,
+            confirmedOff = if (k in from.confirmedOff) confirmedOff + k else confirmedOff - k,
         )
     }
 }
@@ -97,6 +111,23 @@ data class CachedEntry(val ring: Boolean, val reason: String)
 
 @Serializable
 data class NextPlan(val date: String, val time: String, val reason: String, val ringAt: Long)
+
+/**
+ * 아직 확인하지 않은 연속 휴무 일정 (알람 재계산 때 갱신).
+ * @param start 쉬는 날이 이어지는 구간 시작, [end] 끝 (주말·공휴일 포함)
+ * @param pending 확인 전이라 울리게 되는 날짜들
+ * @param titles 일정 제목
+ */
+@Serializable
+data class PendingOffStreak(val start: String, val end: String, val pending: List<String>, val titles: List<String>) {
+    val startDate: LocalDate get() = LocalDate.parse(start)
+    val endDate: LocalDate get() = LocalDate.parse(end)
+    val pendingDates: List<LocalDate> get() = pending.mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }
+    val days: Int get() = (endDate.toEpochDay() - startDate.toEpochDay()).toInt() + 1
+
+    /** 10/13(월)~10/15(수) 제주 여행 (3일) */
+    fun describe(): String = "${startDate.pretty()}~${endDate.pretty()} ${titles.joinToString(", ")} (${days}일)"
+}
 
 @Serializable
 data class DeviceSnapshot(val on: Boolean? = null, val level: Int? = null)
@@ -123,6 +154,10 @@ data class AppState(
     /** 날짜별 판정 캐시 (캘린더를 읽을 수 없을 때 사용) */
     val cache: Map<String, CachedEntry> = emptyMap(),
     val next: NextPlan? = null,
+    /** 확인이 필요한 연속 휴무 일정 (비어 있으면 없음) */
+    val pendingOff: List<PendingOffStreak> = emptyList(),
+    /** 연속 휴무 확인 알림을 이미 보낸 날짜 (같은 일정으로 반복 알림 방지) */
+    val pendingOffAsked: Set<String> = emptySet(),
     val session: SessionState? = null,
     /** 마지막으로 알람 일정을 다시 계산한 시각 */
     val lastCheck: Long? = null,

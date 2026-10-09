@@ -14,6 +14,8 @@ object DayOffJudge {
      * @param overrideTime 일회성 변경 시각. 있으면 무조건 그 시각에 울림
      * @param cached 캘린더를 읽을 수 없을 때 사용할 이전 판정
      * @param manualOff 앱에서 직접 쉬는 날로 지정 (일회성 변경과 동시에 존재하지 않음)
+     * @param offNeedsConfirm true면 휴무 키워드 일정만으로는 쉬지 않음 (연속 휴무 일정을 아직 확인하지 않은 날).
+     *   주말·공휴일이면 그 규칙으로 쉬고, 평일이면 OFF_UNCONFIRMED로 울림
      */
     fun judge(
         date: LocalDate,
@@ -24,6 +26,7 @@ object DayOffJudge {
         overrideTime: LocalTime? = null,
         cached: CachedDecision? = null,
         manualOff: Boolean = false,
+        offNeedsConfirm: Boolean = false,
     ): Judgement {
         // 0순위: 날짜별 직접 지정 (시각 변경 = 울림, 쉬는 날 지정 = 쉼). 캘린더와 무관
         if (overrideTime != null) {
@@ -54,21 +57,25 @@ object DayOffJudge {
             ?.let { return Judgement(date, true, baseTime, ReasonCode.WORK_EVENT, it.title) }
 
         // 2순위: 휴무 키워드 (제외 키워드가 함께 있으면 무시)
-        keywordTargets.firstOrNull {
+        val off = keywordTargets.firstOrNull {
             KeywordMatcher.firstHit(rule.excludeKeywords, it.title) == null &&
                 KeywordMatcher.firstHit(rule.offKeywords, it.title) != null
-        }?.let { return Judgement(date, false, baseTime, ReasonCode.OFF_EVENT, it.title) }
-
+        }
         // 3순위: 공휴일 캘린더
-        todays.firstOrNull {
+        val holiday = todays.firstOrNull {
             it.calendarId in rule.holidayCalendarIds &&
                 KeywordMatcher.firstHit(rule.holidayExcludeKeywords, it.title) == null
-        }?.let { return Judgement(date, false, baseTime, ReasonCode.HOLIDAY, it.title) }
-
-        // 4순위: 주말
-        if (date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY) {
-            return Judgement(date, false, baseTime, ReasonCode.WEEKEND)
         }
+        // 4순위: 주말
+        val weekend = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
+
+        if (off != null && !offNeedsConfirm) {
+            return Judgement(date, false, baseTime, ReasonCode.OFF_EVENT, off.title, eventOnly = holiday == null && !weekend)
+        }
+        if (holiday != null) return Judgement(date, false, baseTime, ReasonCode.HOLIDAY, holiday.title)
+        if (weekend) return Judgement(date, false, baseTime, ReasonCode.WEEKEND)
+        // 확인 전인 연속 휴무 일정: 평일처럼 울리되 사유는 남김
+        if (off != null) return Judgement(date, true, baseTime, ReasonCode.OFF_UNCONFIRMED, off.title)
         return Judgement(date, true, baseTime, ReasonCode.WEEKDAY)
     }
 

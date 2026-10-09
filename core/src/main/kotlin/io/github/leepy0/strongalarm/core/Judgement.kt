@@ -18,6 +18,8 @@ enum class ReasonCode {
     MANUAL_OFF,
     WORK_EVENT,
     OFF_EVENT,
+    /** 휴무 일정이 2일 이상 이어지는데 아직 안 울려도 된다고 확인하지 않음 → 평일처럼 울림 */
+    OFF_UNCONFIRMED,
     HOLIDAY,
     WEEKEND,
     WEEKDAY,
@@ -34,12 +36,15 @@ data class Judgement(
     val time: LocalTime,
     val code: ReasonCode,
     val detail: String? = null,
+    /** OFF_EVENT일 때: 휴무 일정이 없었다면 울렸을 날 (주말·공휴일이 아님). 연속 휴무 확인 대상 */
+    val eventOnly: Boolean = false,
 ) {
     fun describe(): String = when (code) {
         ReasonCode.OVERRIDE -> "일회성 변경 $time"
         ReasonCode.MANUAL_OFF -> "직접 쉬는 날로 지정"
         ReasonCode.WORK_EVENT -> "근무 일정: $detail"
         ReasonCode.OFF_EVENT -> "휴무 일정: $detail"
+        ReasonCode.OFF_UNCONFIRMED -> "연속 휴무 일정 확인 전: $detail"
         ReasonCode.HOLIDAY -> "공휴일: $detail"
         ReasonCode.WEEKEND -> "주말"
         ReasonCode.WEEKDAY -> "평일"

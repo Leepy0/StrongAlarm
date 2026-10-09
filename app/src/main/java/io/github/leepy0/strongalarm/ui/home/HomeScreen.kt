@@ -65,7 +65,22 @@ data class DayCell(
     val confirmed: Boolean = false,
     /** 직접 쉬는 날로 지정한 날 */
     val manualOff: Boolean = false,
+    /** 연속 휴무 일정인데 아직 안 울려도 된다고 확인하지 않아 울리는 날 */
+    val pendingOff: Boolean = false,
 )
+
+/**
+ * 확인이 필요한 연속 휴무 일정. 확인 전엔 [pending] 날들이 평일처럼 울림
+ * @param start 쉬는 날이 이어지는 구간 시작, [end] 끝 (주말·공휴일 포함)
+ */
+data class PendingStreak(
+    val start: LocalDate,
+    val end: LocalDate,
+    val pending: List<LocalDate>,
+    val titles: List<String>,
+) {
+    val days: Int get() = (end.toEpochDay() - start.toEpochDay()).toInt() + 1
+}
 
 data class NextAlarm(
     val date: LocalDate,
@@ -112,6 +127,8 @@ data class HomeUiState(
     val readiness: Readiness,
     /** 'n분 전' 계산 기준 (테스트에서 고정) */
     val nowMillis: Long = System.currentTimeMillis(),
+    /** 안 울려도 되는지 확인이 필요한 연속 휴무 일정 */
+    val pendingOff: List<PendingStreak> = emptyList(),
 )
 
 /** 오늘·내일·모레 또는 10/9(금) */
@@ -136,6 +153,9 @@ fun HomeScreen(
     onOpenLights: () -> Unit,
     @Suppress("UNUSED_PARAMETER") onOpenUpdate: () -> Unit, // 새 버전 안내는 알림·설정에서 (문제 항목이 아님)
     onToggleConfirm: () -> Unit = {},
+    /** 연속 휴무 일정 [안 울려도 돼요] / [그래도 울리기] */
+    onConfirmOff: (PendingStreak) -> Unit = {},
+    onRingOff: (PendingStreak) -> Unit = {},
 ) {
     Column(
         Modifier
@@ -147,6 +167,15 @@ fun HomeScreen(
         if (state.ringing) RingingBanner(onOpenAlarm)
 
         Hero(state, onOpenRules, onToggleConfirm)
+
+        // 캘린더에서 찾은 연속 휴무 일정: 답하기 전엔 그 날들이 울리므로 달력보다 먼저
+        if (state.pendingOff.isNotEmpty()) {
+            Spacer(Modifier.height(32.dp))
+            SectionLabel("연속 휴무 일정, 안 울려도 될까요?")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.pendingOff.forEach { s -> PendingOffCard(s, { onConfirmOff(s) }, { onRingOff(s) }) }
+            }
+        }
 
         Spacer(Modifier.height(32.dp))
         SectionLabel("이번 주 · 다음 주")
@@ -282,6 +311,46 @@ private fun ConfirmRow(next: NextAlarm, onToggle: () -> Unit) {
                 modifier = Modifier.weight(1f),
             )
             TextButton(onClick = onToggle) { Text("울림 확인", color = Palette.SunText) }
+        }
+    }
+}
+
+/**
+ * 연속 휴무 일정 하나: 기간·제목과 확인 전 상태, 주요 행동은 '안 울려도 돼요'(일정을 만든 쪽이 보통 맞음)
+ */
+@Composable
+private fun PendingOffCard(s: PendingStreak, onConfirmOff: () -> Unit, onRingOff: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .background(Palette.Dusk)
+            .padding(16.dp),
+    ) {
+        Text(
+            "${s.start.pretty()} ~ ${s.end.pretty()} · ${s.days}일",
+            style = MaterialTheme.typography.titleMedium,
+            color = Palette.Ink,
+        )
+        Text(
+            s.titles.joinToString(", "),
+            style = MaterialTheme.typography.bodyLarge,
+            color = Palette.Moon,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        Text(
+            "확인 전엔 평일처럼 울려요 (${s.pending.joinToString(", ") { it.pretty() }})",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Palette.Mist,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = onConfirmOff,
+                colors = ButtonDefaults.buttonColors(containerColor = Palette.MoonSoft, contentColor = Palette.Moon),
+                modifier = Modifier.weight(1f),
+            ) { Text("안 울려도 돼요") }
+            OutlinedButton(onClick = onRingOff, modifier = Modifier.weight(1f)) { Text("그래도 울리기", color = Palette.Ink) }
         }
     }
 }

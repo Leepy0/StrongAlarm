@@ -117,6 +117,8 @@ fun RulesScreen(
             Spacer(Modifier.height(16.dp))
             Hint("이 단어가 함께 있으면 휴무로 보지 않아요")
             KeywordChips(rule.excludeKeywords, ChipTone.PLAIN, "제외 키워드 추가") { onChange(rule.copy(excludeKeywords = it)) }
+            Spacer(Modifier.height(16.dp))
+            Hint("휴무 일정으로 쉬는 평일이 2일 이상 이어지면 안 울려도 되는지 먼저 물어봐요. 답하기 전엔 그 날들이 평일처럼 울려요.")
         }
         Step(4, "공휴일", ring = false) {
             val names = rule.holidayCalendarIds.mapNotNull { state.calendarNames[it] }

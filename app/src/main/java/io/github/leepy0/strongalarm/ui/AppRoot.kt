@@ -85,6 +85,7 @@ import io.github.leepy0.strongalarm.ui.home.DaySheetContent
 import io.github.leepy0.strongalarm.ui.home.HomeScreen
 import io.github.leepy0.strongalarm.ui.home.HomeUiState
 import io.github.leepy0.strongalarm.ui.home.NextAlarm
+import io.github.leepy0.strongalarm.ui.home.PendingStreak
 import io.github.leepy0.strongalarm.ui.home.Readiness
 import io.github.leepy0.strongalarm.ui.rules.RulesScreen
 import io.github.leepy0.strongalarm.ui.rules.RulesUiState
@@ -126,6 +127,7 @@ private sealed interface TimeTarget {
 /** 판정 → 2주 격자 칸 */
 fun Judgement.toCell(s: AppSettings): DayCell {
     val label = when {
+        code == ReasonCode.OFF_UNCONFIRMED -> "미확인"
         ring -> time.hhmm()
         code == ReasonCode.WEEKEND -> "주말"
         code == ReasonCode.HOLIDAY -> "공휴일"
@@ -136,6 +138,7 @@ fun Judgement.toCell(s: AppSettings): DayCell {
         date, ring, time, s.overrides.containsKey(date.toString()), label, sentence(),
         confirmed = ring && s.isConfirmed(date),
         manualOff = code == ReasonCode.MANUAL_OFF,
+        pendingOff = code == ReasonCode.OFF_UNCONFIRMED,
     )
 }
 
@@ -264,7 +267,7 @@ fun AppRoot(
     var judgements by remember { mutableStateOf<List<Judgement>>(emptyList()) }
     // 판정에 영향 있는 설정만 키로 (볼륨·걸음 수 바꿀 때 캘린더 재조회하지 않게)
     LaunchedEffect(
-        settings.rule, settings.overrides, settings.skips, settings.alarmHour, settings.alarmMinute,
+        settings.rule, settings.overrides, settings.skips, settings.confirmedOff, settings.alarmHour, settings.alarmMinute,
         appState.next, today,
     ) {
         val count = 14L - (today.dayOfWeek.value - 1)
@@ -274,6 +277,13 @@ fun AppRoot(
         }
     }
     val days = judgements.map { it.toCell(settings) }
+
+    // 확인이 필요한 연속 휴무 일정 (알람 재계산 때 저장됨)
+    val pendingOff = remember(appState.pendingOff) {
+        appState.pendingOff.mapNotNull { p ->
+            runCatching { PendingStreak(p.startDate, p.endDate, p.pendingDates, p.titles) }.getOrNull()
+        }
+    }
 
     // ── 워치·캘린더·조명 ──
     var watchNodes by remember { mutableStateOf<Int?>(null) }
@@ -371,6 +381,25 @@ fun AppRoot(
 
     fun unconfirmDay(date: LocalDate) =
         changeDay(date, "${date.pretty()} 울림 확인을 취소했어요", guard = true) { it.withoutConfirm(date) }
+
+    /** 연속 휴무 일정 [안 울려도 돼요]: 그 날들 쉼. 되돌리기는 날짜별 상태 복구 */
+    fun confirmOff(s: PendingStreak) {
+        val dates = s.pending.filterNot { Stores.state.get(ctx).dayLocked(it) }
+        if (dates.isEmpty()) {
+            notify("알람이 진행 중이라 바꿀 수 없어요. 걸어서 꺼주세요.")
+            return
+        }
+        val before = settings
+        save { it.withConfirmedOff(dates) }
+        undoable("${s.start.pretty()}~${s.end.pretty()} 안 울려요") { save { st -> dates.fold(st) { acc, d -> acc.restoreDay(d, before) } } }
+    }
+
+    /** 연속 휴무 일정 [그래도 울리기]: 그 날들을 매일 시각으로 지정 (23시 안내의 '그래도 울리기'와 같음) */
+    fun ringOff(s: PendingStreak) {
+        val before = settings
+        save { st -> s.pending.fold(st) { acc, d -> acc.withTime(d, acc.baseTime) } }
+        undoable("${s.start.pretty()}~${s.end.pretty()} 평일처럼 울려요") { save { st -> s.pending.fold(st) { acc, d -> acc.restoreDay(d, before) } } }
+    }
 
     fun setBaseTime(time: LocalTime) {
         val old = settings.baseTime
@@ -603,6 +632,7 @@ fun AppRoot(
                                         newVersion = newRemote?.versionName,
                                     ),
                                     nowMillis = nowMillis,
+                                    pendingOff = pendingOff,
                                 ),
                                 onDayClick = { sheetDate = it },
                                 onEditBaseTime = { timeTarget = TimeTarget.Base },
@@ -614,6 +644,8 @@ fun AppRoot(
                                 onToggleConfirm = {
                                     next?.let { n -> if (n.confirmed) unconfirmDay(n.date) else confirmDay(n.date) }
                                 },
+                                onConfirmOff = ::confirmOff,
+                                onRingOff = ::ringOff,
                             )
                         }
 
@@ -731,6 +763,14 @@ fun AppRoot(
                     },
                     onUnconfirm = {
                         unconfirmDay(cell.date)
+                        sheetDate = null
+                    },
+                    pendingStreakDays = pendingOff.firstOrNull { cell.date in it.pending }?.pending?.size ?: 0,
+                    onConfirmOff = {
+                        // 이 날이 속한 연속 휴무 일정 전체를 확인. 묶음을 못 찾으면 이 날만
+                        val streak = pendingOff.firstOrNull { cell.date in it.pending }
+                            ?: PendingStreak(cell.date, cell.date, listOf(cell.date), listOfNotNull(cell.reason))
+                        confirmOff(streak)
                         sheetDate = null
                     },
                 )
