@@ -120,8 +120,6 @@ object AlarmScheduler {
 
         pruneOverrides(ctx, today)
         val input = JudgeInput(ctx, today, PLAN_DAYS + 1)
-        updateCache(ctx, today, input)
-        updatePendingOff(ctx, today, input)
 
         am.cancel(pending(ctx, ACTION_RING, REQ_RING, null))
         am.cancel(pending(ctx, ACTION_PRE, REQ_PRE, null))
@@ -150,6 +148,9 @@ object AlarmScheduler {
             Stores.state.update(ctx) { it.copy(next = null) }
         }
 
+        // 알람을 먼저 등록한 뒤에 캐시·연속 휴무 알림을 처리해, 여기서 오류가 나도 알람은 살아남음
+        updateCache(ctx, today, input)
+        updatePendingOff(ctx, today, input)
         Stores.state.update(ctx) {
             it.copy(lastCheck = System.currentTimeMillis(), lastCheckCalendarOk = input.events != null)
         }

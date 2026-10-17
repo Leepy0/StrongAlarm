@@ -133,8 +133,8 @@ object ApkDownloads {
             }
         }.getOrNull()
         if (status != DownloadManager.STATUS_SUCCESSFUL) return Verify.FAILED
-        val expected = shaOf(entry)
-        if (expected.isEmpty()) return Verify.OK
+        // 기대값이 없으면 확인할 수 없으므로 믿지 않음 (빈 값을 통과시키면 무결성 검사가 꺼짐)
+        val expected = shaOf(entry).ifEmpty { return Verify.FAILED }
         val actual = runCatching {
             dm.openDownloadedFile(id).use { pfd ->
                 FileInputStream(pfd.fileDescriptor).use { input ->

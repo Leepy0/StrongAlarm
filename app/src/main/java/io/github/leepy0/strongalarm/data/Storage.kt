@@ -24,19 +24,28 @@ object Storage {
         AtomicFile(File(dir(ctx), name)).readFully().toString(Charsets.UTF_8)
     }.getOrNull()
 
-    fun writeText(ctx: Context, name: String, text: String) {
+    /** @return 저장 성공 여부 */
+    fun writeText(ctx: Context, name: String, text: String): Boolean {
         val file = AtomicFile(File(dir(ctx), name))
         val out = runCatching { file.startWrite() }.getOrElse {
             Log.e(TAG, "쓰기 실패: $name", it)
-            return
+            return false
         }
-        try {
+        return try {
             out.write(text.toByteArray(Charsets.UTF_8))
             file.finishWrite(out)
+            true
         } catch (e: Exception) {
             file.failWrite(out)
             Log.e(TAG, "쓰기 실패: $name", e)
+            false
         }
+    }
+
+    /** 읽을 수 없는 파일을 .bad로 옮김. 다음 저장이 덮어써서 원본이 사라지는 것을 막는다 */
+    fun quarantine(ctx: Context, name: String) {
+        Log.e(TAG, "읽을 수 없어 기본값으로 시작: $name")
+        File(dir(ctx), name).takeIf { it.exists() }?.renameTo(File(dir(ctx), "$name.bad"))
     }
 }
 
@@ -58,8 +67,8 @@ class JsonFileStore<T>(
     fun update(ctx: Context, transform: (T) -> T): T = synchronized(lock) {
         val f = ensure(ctx)
         val next = transform(f.value)
-        if (next != f.value) {
-            Storage.writeText(ctx, fileName, Storage.json.encodeToString(serializer, next))
+        // 저장이 실패하면 메모리 값도 그대로 둬서, 다음 갱신 때 다시 저장되게 함
+        if (next != f.value && Storage.writeText(ctx, fileName, Storage.json.encodeToString(serializer, next))) {
             f.value = next
         }
         next
@@ -72,6 +81,9 @@ class JsonFileStore<T>(
 
     private fun load(ctx: Context): T {
         val text = Storage.readText(ctx, fileName) ?: return default()
-        return runCatching { Storage.json.decodeFromString(serializer, text) }.getOrElse { default() }
+        return runCatching { Storage.json.decodeFromString(serializer, text) }.getOrElse {
+            Storage.quarantine(ctx, fileName)
+            default()
+        }
     }
 }

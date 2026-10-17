@@ -19,12 +19,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 
-/** goAsync + 코루틴. 브로드캐스트 제한 시간 안에 끝나도록 타임아웃 */
-private fun BroadcastReceiver.goAsyncWork(timeoutMs: Long = 25_000, block: suspend () -> Unit) {
+/** goAsync + 코루틴. 브로드캐스트 제한 시간 안에 끝나도록 타임아웃. 오류는 이력에 남기고 프로세스를 죽이지 않음 */
+private fun BroadcastReceiver.goAsyncWork(ctx: Context, timeoutMs: Long = 25_000, block: suspend () -> Unit) {
     val pending = goAsync()
     CoroutineScope(Dispatchers.IO).launch {
         try {
             withTimeoutOrNull(timeoutMs) { block() }
+        } catch (e: Exception) {
+            HistoryLog.add(ctx, "작업 오류: $e")
         } finally {
             pending.finish()
         }
@@ -41,11 +43,11 @@ class AlarmReceiver : BroadcastReceiver() {
             AlarmScheduler.ACTION_TEST,
             -> AlarmService.start(ctx, intent.action!!, date, intent.getIntExtra(AlarmScheduler.EXTRA_RETRY, 0))
 
-            AlarmScheduler.ACTION_NIGHTLY -> goAsyncWork { Nightly.run(ctx) }
+            AlarmScheduler.ACTION_NIGHTLY -> goAsyncWork(ctx) { Nightly.run(ctx) }
 
-            AlarmScheduler.ACTION_LIGHTS_OFF -> goAsyncWork { LightController.autoOff(ctx) }
+            AlarmScheduler.ACTION_LIGHTS_OFF -> goAsyncWork(ctx) { LightController.autoOff(ctx) }
 
-            AlarmScheduler.ACTION_FORCE_RING -> goAsyncWork {
+            AlarmScheduler.ACTION_FORCE_RING -> goAsyncWork(ctx) {
                 val d = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@goAsyncWork
                 val base = Stores.settings.get(ctx).baseTime
                 Stores.settings.update(ctx) { it.withTime(d, base) }
@@ -55,7 +57,7 @@ class AlarmReceiver : BroadcastReceiver() {
             }
 
             // 23시 안내 [울림 확인]: 그날 알람은 쉬는 날 버튼 잠금
-            AlarmScheduler.ACTION_CONFIRM -> goAsyncWork {
+            AlarmScheduler.ACTION_CONFIRM -> goAsyncWork(ctx) {
                 val d = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@goAsyncWork
                 if (!stillPending(ctx, d)) {
                     HistoryLog.add(ctx, "울림 확인 무시: $d 알람이 이미 지남")
@@ -67,7 +69,7 @@ class AlarmReceiver : BroadcastReceiver() {
             }
 
             // 연속 휴무 일정 [안 울려도 돼요] / [그래도 울리기]. 알람이 진행 중인 날짜는 건너뜀
-            AlarmScheduler.ACTION_CONFIRM_OFF, AlarmScheduler.ACTION_RING_OFF -> goAsyncWork {
+            AlarmScheduler.ACTION_CONFIRM_OFF, AlarmScheduler.ACTION_RING_OFF -> goAsyncWork(ctx) {
                 val st = Stores.state.get(ctx)
                 val dates = intent.getStringExtra(AlarmScheduler.EXTRA_DATES).orEmpty().split(',')
                     .mapNotNull { runCatching { LocalDate.parse(it.trim()) }.getOrNull() }
@@ -90,7 +92,7 @@ class AlarmReceiver : BroadcastReceiver() {
             }
 
             // 23시 안내 [쉬는 날로]. 알람이 진행 중인 날짜면 무시
-            AlarmScheduler.ACTION_SKIP -> goAsyncWork {
+            AlarmScheduler.ACTION_SKIP -> goAsyncWork(ctx) {
                 val d = date?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@goAsyncWork
                 if (Stores.state.get(ctx).dayLocked(d) || !stillPending(ctx, d)) {
                     HistoryLog.add(ctx, "쉬는 날 지정 무시: $d 알람 진행 중이거나 이미 지남")
@@ -118,7 +120,7 @@ private fun stillPending(ctx: Context, d: LocalDate): Boolean {
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
-        goAsyncWork {
+        goAsyncWork(ctx) {
             val boot = intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_LOCKED_BOOT_COMPLETED
             if (boot) endSessionByReboot(ctx, intent.action == Intent.ACTION_BOOT_COMPLETED)
             AlarmScheduler.rescheduleAll(ctx)

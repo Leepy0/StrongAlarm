@@ -321,7 +321,8 @@ class AlarmService : Service() {
     private fun beginSession(date: LocalDate, settings: AppSettings, originalVolume: Int) {
         Stores.state.update(ctx) { st ->
             val cur = st.session
-            val next = if (cur != null && cur.date == date.toString() && cur.phase != Phase.DONE) {
+            // 같은 날 다시 울리면(DONE 포함) 처음 찍은 조명 스냅샷을 유지해야 자동 소등이 조명을 끌 수 있음
+            val next = if (cur != null && cur.date == date.toString()) {
                 cur.copy(phase = Phase.RINGING)
             } else {
                 SessionState(date.toString(), ringStartedAt, Phase.RINGING)
