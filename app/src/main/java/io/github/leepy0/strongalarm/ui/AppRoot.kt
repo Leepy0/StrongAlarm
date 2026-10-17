@@ -666,6 +666,8 @@ fun AppRoot(
                             state = SettingsUiState(
                                 stepGoal = settings.stepGoal,
                                 alarmVolume = settings.alarmVolume,
+                                reRingEnabled = settings.reRingEnabled,
+                                reRingIdleMinutes = settings.reRingIdleMinutes,
                                 previewing = previewSound != null,
                                 app = AppVersionUi(
                                     installed = remember { Updater.installedVersionName(ctx) },
@@ -711,6 +713,8 @@ fun AppRoot(
                                     .onFailure { notify("내 파일 > 다운로드에서 StrongAlarm APK를 눌러 설치해주세요") }
                             },
                             onOpenReleasePage = { openUrl(Updater.RELEASE_PAGE) },
+                            onReRingEnabled = { v -> Stores.settings.update(ctx) { it.copy(reRingEnabled = v) } },
+                            onReRingMinutes = { v -> Stores.settings.update(ctx) { it.copy(reRingIdleMinutes = v.coerceIn(3, 30)) } },
                         )
                     }
                 }

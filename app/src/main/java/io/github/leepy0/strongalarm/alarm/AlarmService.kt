@@ -1,5 +1,6 @@
 package io.github.leepy0.strongalarm.alarm
 
+import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
@@ -18,6 +19,7 @@ import io.github.leepy0.strongalarm.alarm.AlarmSession.UiPhase
 import io.github.leepy0.strongalarm.alarm.AlarmSession.UiState
 import io.github.leepy0.strongalarm.core.AlarmPlanner
 import io.github.leepy0.strongalarm.core.DimRamp
+import io.github.leepy0.strongalarm.core.WakeWatch
 import io.github.leepy0.strongalarm.core.WearProtocol
 import io.github.leepy0.strongalarm.data.AppSettings
 import io.github.leepy0.strongalarm.data.HistoryLog
@@ -44,6 +46,7 @@ import java.time.ZoneId
  * 알람 세션 전체를 담당하는 포그라운드 서비스 (systemExempted: 정확한 알람 권한 보유 앱의 알람 지속용)
  *
  * IDLE → (PRE) DIMMING → (RING) RINGING ⇄ PAUSED(휴무 버튼 누르는 중) → 걸음 달성 / 휴무 → IDLE
+ * 걸음 달성 후 설정에 따라 WATCHING(움직임·폰 사용 없으면 다시 RINGING) → IDLE
  */
 class AlarmService : Service() {
 
@@ -55,6 +58,9 @@ class AlarmService : Service() {
         const val ACTION_HOLIDAY = "$PKG.HOLIDAY"
 
         private const val FGS_TYPE = ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED
+
+        /** 다시 잠듦 감시 확인 주기 */
+        private const val WATCH_POLL_MS = 10_000L
 
         /** 서비스 종료 후에도 이어져야 하는 작업 (워치 종료 재전송, 로그) */
         private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -86,7 +92,7 @@ class AlarmService : Service() {
         }
     }
 
-    private enum class Mode { IDLE, DIMMING, RINGING, PAUSED, FINISHING }
+    private enum class Mode { IDLE, DIMMING, RINGING, PAUSED, FINISHING, WATCHING }
 
     private var mode = Mode.IDLE
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -101,6 +107,11 @@ class AlarmService : Service() {
     private var watchAcked = false
     private var test = false
     private var goal = 30
+    private var ringDate: LocalDate = LocalDate.now()
+    private var wakeWatch: WakeWatch? = null
+    private var watchTracker: StepTracker? = null
+    private var watchSteps = 0
+    private var watchJob: Job? = null
     /** 전날 울림 확인 → 쉬는 날 버튼 무시 */
     private var restLocked = false
     /** 테스트 알람 종료 처리 중 도착한 실제 알람 → 종료 후 바로 울림 */
@@ -138,6 +149,7 @@ class AlarmService : Service() {
     }
 
     override fun onDestroy() {
+        if (mode == Mode.WATCHING) endWatching()
         if (mode == Mode.RINGING || mode == Mode.PAUSED) stopRinging()
         dimJob?.cancel()
         scope.cancel()
@@ -148,6 +160,7 @@ class AlarmService : Service() {
     // ───────── 디밍 ─────────
 
     private fun onPre(date: LocalDate) {
+        if (mode == Mode.WATCHING) endWatching()
         if (mode != Mode.IDLE) return
         mode = Mode.DIMMING
         acquireWakeLock()
@@ -217,6 +230,8 @@ class AlarmService : Service() {
                 log("디밍 중이라 테스트 알람 무시")
                 return
             }
+            // 다시 잠듦 감시 중 다음 알람 도착 → 감시 종료 후 새로 울림
+            Mode.WATCHING -> endWatching()
             Mode.IDLE -> Unit
         }
         val wasDimming = mode == Mode.DIMMING
@@ -245,11 +260,13 @@ class AlarmService : Service() {
         }
     }
 
-    private fun startRinging(date: LocalDate, test: Boolean, reason: String) {
+    private fun startRinging(date: LocalDate, test: Boolean, reason: String, reRing: Boolean = false) {
         this.test = test
+        ringDate = date
         val settings = Stores.settings.get(ctx)
         goal = settings.stepGoal
-        restLocked = !test && settings.isConfirmed(date)
+        // 이미 일어났던 알람이 다시 울리는 경우도 쉬는 날 버튼 잠금
+        restLocked = !test && (reRing || settings.isConfirmed(date))
         ringStartedAt = System.currentTimeMillis()
         dimJob?.cancel()
 
@@ -267,7 +284,10 @@ class AlarmService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "startForeground 실패", e)
         }
-        getSystemService(NotificationManager::class.java).cancel(Notifications.ID_PREP)
+        getSystemService(NotificationManager::class.java).apply {
+            cancel(Notifications.ID_PREP)
+            cancel(Notifications.ID_WATCH)
+        }
         launchActivityIfAllowed()
 
         // 설정한 크기로 고정 (점점 커지는 방식 없음)
@@ -293,7 +313,7 @@ class AlarmService : Service() {
             if (AlarmSession.state.value.steps == 0) log("1분째 걸음 0 — ${stepDiagnosis()}")
         }
 
-        if (!test) startSwitchTimer(settings)
+        if (!test && !reRing) startSwitchTimer(settings)
         log("울림 시작 — $reason" + if (restLocked) " (전날 확인: 쉬는 날 버튼 잠금)" else "")
     }
 
@@ -342,6 +362,7 @@ class AlarmService : Service() {
             if (!j.ring || !test || (mode != Mode.RINGING && mode != Mode.PAUSED)) return@launch
             val settings = Stores.settings.get(ctx)
             test = false
+            ringDate = date
             restLocked = settings.isConfirmed(date)
             // 쉬는 날 버튼을 누르는 중이었고 잠긴 알람이면 다시 울림
             if (restLocked && mode == Mode.PAUSED) resume()
@@ -464,6 +485,7 @@ class AlarmService : Service() {
         val steps = ui.steps
         val breakdown = "폰 ${ui.phoneSteps} · 워치 ${ui.watchSteps}"
         val test = this.test
+        val watchAfter = !test && !byHoliday && Stores.settings.get(ctx).reRingEnabled
         stopRinging()
 
         // 워치 종료: 유실 대비 3회 전송
@@ -481,9 +503,89 @@ class AlarmService : Service() {
                 Log.e(TAG, "종료 처리 오류", e)
                 log("종료 처리 오류: $e")
             } finally {
-                finishIdle()
+                if (watchAfter) startWatching() else finishIdle()
             }
         }
+    }
+
+    // ───────── 다시 잠듦 감시 ─────────
+
+    /** 기상 확인 후: 움직임(폰 걸음)도 폰 사용도 N분 없으면 다시 울림 */
+    private fun startWatching() {
+        val settings = Stores.settings.get(ctx)
+        val idleMin = settings.reRingIdleMinutes
+        val tracker = StepTracker(this) { n -> onWatchPhoneSteps(n) }
+        if (!tracker.start()) {
+            log("다시 울림 감시 안 함 — 폰 걸음 센서 사용 불가: ${tracker.description}")
+            finishIdle()
+            return
+        }
+        AlarmSession.reset()
+        watchTracker = tracker
+        watchSteps = 0
+        wakeWatch = WakeWatch(System.currentTimeMillis(), idleMin * 60_000L)
+        mode = Mode.WATCHING
+        try {
+            startForeground(
+                Notifications.ID_WATCH,
+                Notifications.watching(this, "${idleMin}분 동안 움직임·폰 사용이 없으면 다시 울려요"),
+                FGS_TYPE,
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "startForeground 실패", e)
+        }
+        getSystemService(NotificationManager::class.java).cancel(Notifications.ID_RING)
+        log("기상 후 감시 시작 — ${idleMin}분 움직임·폰 사용 없으면 다시 울림")
+        watchJob = scope.launch {
+            val pm = getSystemService(PowerManager::class.java)
+            val km = getSystemService(KeyguardManager::class.java)
+            while (isActive) {
+                delay(WATCH_POLL_MS)
+                val w = wakeWatch ?: return@launch
+                val now = System.currentTimeMillis()
+                // 폰 사용 = 화면이 켜져 있고 잠금이 풀린 상태
+                if (pm.isInteractive && !km.isKeyguardLocked) w.onActive(now)
+                when (w.check(now)) {
+                    WakeWatch.Verdict.WAIT -> Unit
+                    WakeWatch.Verdict.RING -> {
+                        reRing(idleMin)
+                        return@launch
+                    }
+                    WakeWatch.Verdict.EXPIRED -> {
+                        log("기상 후 감시 종료 — 다시 잠든 흔적 없음")
+                        endWatching()
+                        finishIdle()
+                        return@launch
+                    }
+                }
+            }
+        }
+    }
+
+    private fun onWatchPhoneSteps(n: Int) {
+        // 센서가 등록 직후 보내는 초기값(0)은 움직임이 아님
+        if (n > watchSteps) {
+            watchSteps = n
+            wakeWatch?.onActive(System.currentTimeMillis())
+        }
+    }
+
+    private fun endWatching() {
+        watchJob?.cancel()
+        watchJob = null
+        watchTracker?.stop()
+        watchTracker = null
+        wakeWatch = null
+        getSystemService(NotificationManager::class.java).cancel(Notifications.ID_WATCH)
+        mode = Mode.IDLE
+    }
+
+    private fun reRing(idleMin: Int) {
+        val date = ringDate
+        endWatching()
+        log("${idleMin}분간 움직임·폰 사용 없음 → 다시 울림")
+        mode = Mode.RINGING
+        startRinging(date, test = false, reason = "${idleMin}분간 움직임이 없어서 다시 울려요", reRing = true)
     }
 
     /** 종료 후 정리: 조명(휴무면 즉시 복구, 기상이면 자동 소등 예약)·기록·재등록 */

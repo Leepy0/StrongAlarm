@@ -20,6 +20,7 @@ import io.github.leepy0.strongalarm.update.UpdateActionReceiver
 object Notifications {
     const val CH_RING = "alarm_ring"
     const val CH_PREP = "alarm_prep"
+    const val CH_WATCH = "alarm_watch"
     const val CH_NIGHTLY = "nightly"
     const val CH_UPDATE = "update"
     const val CH_OFF_STREAK = "off_streak"
@@ -30,6 +31,7 @@ object Notifications {
     const val ID_UPDATE = 1004
     const val ID_FULL_SCREEN = 1005
     const val ID_OFF_STREAK = 1006
+    const val ID_WATCH = 1007
 
     fun createChannels(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
@@ -42,6 +44,7 @@ object Notifications {
                     lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 },
                 NotificationChannel(CH_PREP, "알람 준비 (조명 디밍)", NotificationManager.IMPORTANCE_LOW),
+                NotificationChannel(CH_WATCH, "기상 후 다시 잠듦 감시", NotificationManager.IMPORTANCE_LOW),
                 NotificationChannel(CH_NIGHTLY, "내일 알람 안내", NotificationManager.IMPORTANCE_DEFAULT),
                 NotificationChannel(CH_UPDATE, "새 버전 안내", NotificationManager.IMPORTANCE_DEFAULT),
                 NotificationChannel(CH_OFF_STREAK, "연속 휴무 일정 확인", NotificationManager.IMPORTANCE_DEFAULT),
@@ -53,6 +56,15 @@ object Notifications {
         Notification.Builder(ctx, CH_PREP)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("알람 준비 중")
+            .setContentText(text)
+            .setOngoing(true)
+            .setContentIntent(mainIntent(ctx))
+            .build()
+
+    fun watching(ctx: Context, text: String): Notification =
+        Notification.Builder(ctx, CH_WATCH)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setContentTitle("기상 확인 중")
             .setContentText(text)
             .setOngoing(true)
             .setContentIntent(mainIntent(ctx))
