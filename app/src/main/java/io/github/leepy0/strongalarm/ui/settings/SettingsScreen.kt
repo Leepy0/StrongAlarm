@@ -19,6 +19,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,6 +47,9 @@ data class SettingsUiState(
     val stepGoal: Int,
     /** 알람 크기 % (10~100) */
     val alarmVolume: Int = 100,
+    /** 알람을 끈 뒤 움직임·폰 사용이 없으면 다시 울림 */
+    val reRingEnabled: Boolean = false,
+    val reRingIdleMinutes: Int = 10,
     /** 미리 듣기 재생 중 */
     val previewing: Boolean = false,
     val app: AppVersionUi = AppVersionUi("0.2.1"),
@@ -94,6 +99,8 @@ fun SettingsScreen(
     onDownloadWatch: () -> Unit,
     onOpenDownloads: () -> Unit = {},
     onOpenReleasePage: () -> Unit = {},
+    onReRingEnabled: (Boolean) -> Unit = {},
+    onReRingMinutes: (Int) -> Unit = {},
 ) {
     Column(
         Modifier
@@ -128,6 +135,32 @@ fun SettingsScreen(
                     title = "쉬는 날 버튼",
                     subtitle = "알람 화면에서 5초 누르면 바로 꺼져요. 누르는 동안은 소리가 멈춰요.",
                 )
+                GroupDivider()
+                RowItem(
+                    title = "다시 잠들면 다시 울리기",
+                    subtitle = "끄고 1시간 안에 움직임도 폰 사용도 없으면 다시 울려요. 폰을 들고 걸어야 움직임으로 쳐요.",
+                    trailing = {
+                        Switch(
+                            checked = state.reRingEnabled,
+                            onCheckedChange = onReRingEnabled,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Palette.SunInk,
+                                checkedTrackColor = Palette.Sun,
+                                uncheckedThumbColor = Palette.Mist,
+                                uncheckedTrackColor = Palette.Night,
+                                uncheckedBorderColor = Palette.Mist,
+                            ),
+                        )
+                    },
+                )
+                if (state.reRingEnabled) {
+                    GroupDivider()
+                    RowItem(
+                        title = "기준 시간 (분)",
+                        subtitle = "이만큼 가만히 있고 폰도 안 쓰면",
+                        trailing = { Stepper(state.reRingIdleMinutes, onReRingMinutes, step = 1, min = 3, max = 30) },
+                    )
+                }
             }
         }
 
@@ -325,9 +358,9 @@ private fun VolumeRow(volume: Int, previewing: Boolean, onVolume: (Int) -> Unit,
 }
 
 @Composable
-private fun Stepper(value: Int, onChange: (Int) -> Unit) {
+private fun Stepper(value: Int, onChange: (Int) -> Unit, step: Int = 5, min: Int = 10, max: Int = 200) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { onChange((value - 5).coerceAtLeast(10)) }) {
+        IconButton(onClick = { onChange((value - step).coerceAtLeast(min)) }) {
             AppIcon(R.drawable.ic_minus, Palette.Ink, size = 20)
         }
         Text(
@@ -337,7 +370,7 @@ private fun Stepper(value: Int, onChange: (Int) -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier.width(40.dp),
         )
-        IconButton(onClick = { onChange((value + 5).coerceAtMost(200)) }) {
+        IconButton(onClick = { onChange((value + step).coerceAtMost(max)) }) {
             AppIcon(R.drawable.ic_plus, Palette.Ink, size = 20)
         }
     }

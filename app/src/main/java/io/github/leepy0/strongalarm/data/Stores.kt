@@ -47,6 +47,10 @@ data class AppSettings(
     val stepGoal: Int = 30,
     /** 알람 크기 % (10~100). 처음부터 이 크기로 고정 */
     val alarmVolume: Int = 100,
+    /** 알람을 끈 뒤 움직임·폰 사용이 없으면 다시 울림 */
+    val reRingEnabled: Boolean = false,
+    /** 움직임·폰 사용이 이만큼(분) 없으면 다시 울림 */
+    val reRingIdleMinutes: Int = 10,
     val nightlyHour: Int = 23,
     val nightlyMinute: Int = 0,
     val lights: LightSettings = LightSettings(),
