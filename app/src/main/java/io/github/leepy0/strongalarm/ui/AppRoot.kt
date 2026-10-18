@@ -23,6 +23,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRailItemDefaults
@@ -47,6 +48,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -517,14 +519,14 @@ fun AppRoot(
         navigationBarItemColors = NavigationBarItemDefaults.colors(
             selectedIconColor = Palette.SunText,
             selectedTextColor = Palette.SunText,
-            indicatorColor = Palette.SunSoft,
+            indicatorColor = Color.Transparent,
             unselectedIconColor = Palette.Mist,
             unselectedTextColor = Palette.Mist,
         ),
         navigationRailItemColors = NavigationRailItemDefaults.colors(
             selectedIconColor = Palette.SunText,
             selectedTextColor = Palette.SunText,
-            indicatorColor = Palette.SunSoft,
+            indicatorColor = Color.Transparent,
             unselectedIconColor = Palette.Mist,
             unselectedTextColor = Palette.Mist,
         ),
@@ -723,6 +725,8 @@ fun AppRoot(
                     }
                 }
             }
+            // iOS 탭 바 위쪽 헤어라인
+            if (layoutType == NavigationSuiteType.NavigationBar) HorizontalDivider(Modifier.align(Alignment.BottomCenter), thickness = 0.5.dp, color = Palette.Line)
             SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
         }
     }
@@ -877,7 +881,7 @@ fun AppRoot(
                     scope.launch(Dispatchers.IO) { HistoryLog.add(ctx, "SmartThings 연결 끊음") }
                 }) { Text("연결 끊기", color = Palette.Ember) }
             },
-            dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text("취소", color = Palette.Ink) } },
+            dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text("취소") } },
         )
     }
 }

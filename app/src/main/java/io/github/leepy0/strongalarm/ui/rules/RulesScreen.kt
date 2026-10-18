@@ -19,7 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
+import io.github.leepy0.strongalarm.ui.components.iosSwitchColors
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -65,7 +65,7 @@ fun RulesScreen(
     ) {
         Text(
             "휴무 규칙",
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.headlineLarge,
             color = Palette.Ink,
             modifier = Modifier.padding(top = 32.dp),
         )
@@ -169,13 +169,7 @@ fun RulesScreen(
                     Switch(
                         checked = rule.allDayOnly,
                         onCheckedChange = { onChange(rule.copy(allDayOnly = it)) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Palette.SunInk,
-                            checkedTrackColor = Palette.Sun,
-                            uncheckedThumbColor = Palette.Mist,
-                            uncheckedTrackColor = Palette.Night,
-                            uncheckedBorderColor = Palette.Mist,
-                        ),
+                        colors = iosSwitchColors(),
                     )
                 },
             )

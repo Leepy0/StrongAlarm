@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,8 +42,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,9 +77,9 @@ fun AppIcon(@DrawableRes id: Int, tint: Color, modifier: Modifier = Modifier, si
 fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
-        style = MaterialTheme.typography.labelMedium,
+        style = MaterialTheme.typography.bodySmall,
         color = Palette.Mist,
-        modifier = modifier.padding(start = 4.dp, bottom = 8.dp),
+        modifier = modifier.padding(start = 16.dp, bottom = 6.dp),
     )
 }
 
@@ -92,7 +97,7 @@ fun Group(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> 
 
 @Composable
 fun GroupDivider() {
-    HorizontalDivider(Modifier.padding(start = 16.dp), thickness = 1.dp, color = Palette.Line)
+    HorizontalDivider(Modifier.padding(start = 16.dp), thickness = 0.5.dp, color = Palette.Line)
 }
 
 /** 묶음 안의 한 줄 (M3 ListItem). onClick이 있으면 오른쪽 화살표 */
@@ -120,7 +125,7 @@ fun RowItem(
                     if (value != null) Text(value, style = MaterialTheme.typography.bodyMedium, color = valueColor)
                     trailing?.invoke()
                     if (onClick != null && trailing == null) {
-                        AppIcon(R.drawable.ic_chevron, Palette.Mist, Modifier.padding(start = 8.dp), size = 20)
+                        AppIcon(R.drawable.ic_chevron, Palette.Faint, Modifier.padding(start = 8.dp), size = 18)
                     }
                 }
             }
@@ -134,30 +139,64 @@ fun RowItem(
     )
 }
 
-/** 하위 화면 공통 틀: M3 상단 앱 바(뒤로 + 제목) + 스크롤 본문. 키보드가 올라오면 본문을 밀어 올림 */
+/** 하위 화면 공통 틀: iOS 내비게이션 바(뒤로 chevron) + 큰 제목 + 스크롤 본문. 키보드가 올라오면 본문을 밀어 올림 */
 @Composable
 fun Subpage(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text(title, style = MaterialTheme.typography.titleLarge) },
-            navigationIcon = { IconButton(onClick = onBack) { AppIcon(R.drawable.ic_back, Palette.Ink) } },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Palette.Night,
-                titleContentColor = Palette.Ink,
-            ),
-        )
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        IconButton(onClick = onBack, modifier = Modifier.padding(start = 4.dp)) { AppIcon(R.drawable.ic_back, Palette.SunText) }
         Column(
             Modifier
                 .fillMaxSize()
                 .imePadding()
                 .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
-                .padding(horizontal = ScreenPadding, vertical = 12.dp),
+                .padding(horizontal = ScreenPadding)
+                .padding(bottom = 12.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp),
-            content = content,
-        )
+        ) {
+            Text(title, style = MaterialTheme.typography.headlineLarge, color = Palette.Ink)
+            content()
+        }
     }
 }
+
+/** 채운 버튼: 높이 50 이상, 둥근 12 */
+@Composable
+fun AppButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    colors: ButtonColors = ButtonDefaults.buttonColors(),
+    content: @Composable RowScope.() -> Unit,
+) {
+    Button(onClick, modifier.heightIn(min = 50.dp), enabled, shape = RoundedCornerShape(12.dp), colors = colors, content = content)
+}
+
+/** 보조 버튼: 회색 채움(iOS gray 버튼). 글자색은 호출 측 */
+@Composable
+fun AppSecondaryButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Button(
+        onClick, modifier.heightIn(min = 50.dp), enabled, shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Palette.DuskHigh, contentColor = Palette.Ink),
+        content = content,
+    )
+}
+
+/** iOS 스위치 색: 켜짐 초록, 꺼짐 회색, 흰 손잡이 */
+@Composable
+fun iosSwitchColors() = SwitchDefaults.colors(
+    checkedThumbColor = Color.White,
+    checkedTrackColor = Palette.Green,
+    checkedBorderColor = Palette.Green,
+    uncheckedThumbColor = Color.White,
+    uncheckedTrackColor = Palette.DuskHigh,
+    uncheckedBorderColor = Palette.DuskHigh,
+)
 
 enum class ChipTone { SUN, MOON, PLAIN }
 

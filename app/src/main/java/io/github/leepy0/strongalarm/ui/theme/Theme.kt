@@ -21,61 +21,64 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * 색 토큰. 색은 의미에만 쓴다:
- * sun = 알람이 울리는 날·주요 동작, moon = 쉬는 날, ember = 조치가 필요한 상태. 나머지는 중립색
+ * 색 토큰 (iOS 시스템 색 기준). 이름은 기존 의미를 유지:
+ * sun = 주요 동작·울림(systemBlue), moon = 쉬는 날(systemIndigo), ember = 조치 필요(systemRed). 나머지는 중립색
  */
 @Immutable
 data class AppColors(
-    val bg: Color,          // 배경
-    val surface: Color,     // 묶음·시트
-    val surfaceHigh: Color, // 눌림·칩 배경
-    val line: Color,        // 구분선·트랙
-    val ink: Color,         // 주요 텍스트
-    val mist: Color,        // 보조 텍스트
-    val faint: Color,       // 비활성
-    val sun: Color,         // 울림 채움(원·주요 버튼)
+    val bg: Color,          // 그룹 배경 (systemGroupedBackground)
+    val surface: Color,     // 셀·시트 (secondarySystemGroupedBackground)
+    val surfaceHigh: Color, // 눌림·보조 버튼 배경 (tertiary fill)
+    val line: Color,        // 구분선 (separator)
+    val ink: Color,         // 주요 텍스트 (label)
+    val mist: Color,        // 보조 텍스트 (secondaryLabel)
+    val faint: Color,       // 비활성 (tertiaryLabel)
+    val sun: Color,         // 주요 버튼·진행 채움 (accent)
     val onSun: Color,       // sun 위 텍스트
-    val sunText: Color,     // 울림 의미의 텍스트·아이콘
+    val sunText: Color,     // 강조 텍스트·아이콘
     val sunSoft: Color,     // sun 계열 옅은 배경
     val moon: Color,        // 쉼 텍스트·테두리
     val moonSoft: Color,    // moon 계열 옅은 배경
-    val ember: Color,       // 경고
+    val ember: Color,       // 경고 (systemRed)
+    val green: Color,       // 스위치 켜짐 (systemGreen)
 )
 
-/** 밤 */
+/** 다크 모드: 순검정 배경 + #1C1C1E 셀 */
 val DarkColors = AppColors(
-    bg = Color(0xFF121831),
-    surface = Color(0xFF1C2442),
-    surfaceHigh = Color(0xFF263157),
-    line = Color(0xFF2E3961),
-    ink = Color(0xFFECEFF8),
-    mist = Color(0xFF8E97B8),
-    faint = Color(0xFF5A6388),
-    sun = Color(0xFFFFB347),
-    onSun = Color(0xFF2B1A00),
-    sunText = Color(0xFFFFB347),
-    sunSoft = Color(0xFF3D3222),
-    moon = Color(0xFF9DB1E8),
-    moonSoft = Color(0xFF263257),
-    ember = Color(0xFFFF7A6B),
+    bg = Color(0xFF000000),
+    surface = Color(0xFF1C1C1E),
+    surfaceHigh = Color(0xFF2C2C2E),
+    line = Color(0xA6545458),
+    ink = Color(0xFFFFFFFF),
+    mist = Color(0xFF98989F),
+    faint = Color(0xFF636366),
+    sun = Color(0xFF0A84FF),
+    onSun = Color(0xFFFFFFFF),
+    sunText = Color(0xFF0A84FF),
+    sunSoft = Color(0x330A84FF),
+    moon = Color(0xFF7D7AFF),
+    moonSoft = Color(0x337D7AFF),
+    ember = Color(0xFFFF453A),
+    green = Color(0xFF30D158),
 )
 
-/** 새벽 (밝은 화면). 텍스트용 색은 4.5:1 이상 대비 */
+/** 라이트 모드: #F2F2F7 배경 + 흰 셀 */
 val LightColors = AppColors(
-    bg = Color(0xFFF3F5FA),
+    bg = Color(0xFFF2F2F7),
     surface = Color(0xFFFFFFFF),
-    surfaceHigh = Color(0xFFE8ECF6),
-    line = Color(0xFFD5DBEA),
-    ink = Color(0xFF151B33),
-    mist = Color(0xFF59627F),
-    faint = Color(0xFF9AA2BC),
-    sun = Color(0xFFFFB347),
-    onSun = Color(0xFF2B1A00),
-    sunText = Color(0xFF995800),
-    sunSoft = Color(0xFFFFEFD6),
-    moon = Color(0xFF4A5FA6),
-    moonSoft = Color(0xFFE1E7F7),
-    ember = Color(0xFFC9382A),
+    surfaceHigh = Color(0xFFE5E5EA),
+    line = Color(0x4A3C3C43),
+    ink = Color(0xFF000000),
+    mist = Color(0xFF6C6C70),
+    faint = Color(0xFFAEAEB2),
+    sun = Color(0xFF007AFF),
+    onSun = Color(0xFFFFFFFF),
+    sunText = Color(0xFF007AFF),
+    sunSoft = Color(0x26007AFF),
+    moon = Color(0xFF5856D6),
+    moonSoft = Color(0x265856D6),
+    ember = Color(0xFFFF3B30),
+    green = Color(0xFF34C759),
 )
 
 val LocalAppColors = staticCompositionLocalOf { DarkColors }
@@ -95,6 +98,7 @@ object Palette {
     val SunSoft: Color @Composable @ReadOnlyComposable get() = LocalAppColors.current.sunSoft
     val Moon: Color @Composable @ReadOnlyComposable get() = LocalAppColors.current.moon
     val MoonSoft: Color @Composable @ReadOnlyComposable get() = LocalAppColors.current.moonSoft
+    val Green: Color @Composable @ReadOnlyComposable get() = LocalAppColors.current.green
     val Ember: Color @Composable @ReadOnlyComposable get() = LocalAppColors.current.ember
 }
 
@@ -133,43 +137,46 @@ private fun scheme(c: AppColors, dark: Boolean): ColorScheme {
 }
 
 /**
- * 글자 크기 5단계(88/24/18/15/12), 굵기 2단계(400/600).
- * 88은 시각·걸음 같은 핵심 숫자 전용
+ * iOS 텍스트 스타일 대응: headlineLarge = Large Title 34, headlineMedium = Title1 28, headlineSmall = Title2 22,
+ * titleLarge = Title3 20, titleMedium = Headline 17, titleSmall = Subhead 15 굵게,
+ * bodyLarge = Body 17, bodyMedium = Subhead 15, bodySmall = Footnote 13, labelLarge = 버튼 17, labelMedium = Caption 12, labelSmall = Caption2 11.
+ * display(88)는 시각·걸음 같은 핵심 숫자 전용, 얇은 숫자꼴
  */
 private fun typography(f: FontFamily?): Typography {
     val regular = FontWeight.Normal
     val semi = FontWeight.SemiBold
+    val bold = FontWeight.Bold
     fun s(size: Int, line: Int, w: FontWeight) = TextStyle(fontFamily = f, fontSize = size.sp, lineHeight = line.sp, fontWeight = w)
     val display = TextStyle(
-        fontFamily = f, fontSize = 88.sp, lineHeight = 92.sp, fontWeight = regular,
+        fontFamily = f, fontSize = 88.sp, lineHeight = 92.sp, fontWeight = FontWeight.Light,
         letterSpacing = (-2).sp, fontFeatureSettings = "tnum",
     )
     return Typography(
         displayLarge = display,
         displayMedium = display,
         displaySmall = display,
-        headlineLarge = s(24, 32, semi),
-        headlineMedium = s(24, 32, semi),
-        headlineSmall = s(24, 32, semi),
-        titleLarge = s(18, 24, semi),
-        titleMedium = s(18, 24, semi),
+        headlineLarge = s(34, 41, bold),
+        headlineMedium = s(28, 34, bold),
+        headlineSmall = s(22, 28, bold),
+        titleLarge = s(20, 25, semi),
+        titleMedium = s(17, 22, semi),
         titleSmall = s(15, 20, semi),
-        bodyLarge = s(15, 22, regular),
-        bodyMedium = s(15, 22, regular),
-        bodySmall = s(12, 18, regular),
-        labelLarge = s(15, 20, semi),
-        labelMedium = s(12, 16, semi),
-        labelSmall = s(12, 16, semi),
+        bodyLarge = s(17, 22, regular),
+        bodyMedium = s(15, 20, regular),
+        bodySmall = s(13, 18, regular),
+        labelLarge = s(17, 22, semi),
+        labelMedium = s(12, 16, regular),
+        labelSmall = s(11, 13, semi),
     )
 }
 
-/** 모서리 3종: 8 / 16 / 완전 둥근 모양(CircleShape) */
+/** 모서리: 칩 6 / 작은 8 / 묶음 10 / 알림·시트 14 */
 private val AppShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
+    extraSmall = RoundedCornerShape(6.dp),
     small = RoundedCornerShape(8.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(16.dp),
-    extraLarge = RoundedCornerShape(16.dp),
+    medium = RoundedCornerShape(10.dp),
+    large = RoundedCornerShape(14.dp),
+    extraLarge = RoundedCornerShape(14.dp),
 )
 
 /**

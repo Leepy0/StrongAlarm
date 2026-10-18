@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Button
+import io.github.leepy0.strongalarm.ui.components.AppButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,7 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
+import io.github.leepy0.strongalarm.ui.components.iosSwitchColors
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -112,7 +112,7 @@ fun SettingsScreen(
     ) {
         Text(
             "설정",
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.headlineLarge,
             color = Palette.Ink,
             modifier = Modifier.padding(top = 32.dp),
         )
@@ -143,13 +143,7 @@ fun SettingsScreen(
                         Switch(
                             checked = state.reRingEnabled,
                             onCheckedChange = onReRingEnabled,
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Palette.SunInk,
-                                checkedTrackColor = Palette.Sun,
-                                uncheckedThumbColor = Palette.Mist,
-                                uncheckedTrackColor = Palette.Night,
-                                uncheckedBorderColor = Palette.Mist,
-                            ),
+                            colors = iosSwitchColors(),
                         )
                     },
                 )
@@ -232,7 +226,7 @@ private fun AppVersionRows(
         title = "새 버전 ${app.newVersion}",
         subtitle = "지금 ${app.installed} · 설정은 그대로 남아요",
         trailing = {
-            Button(
+            AppButton(
                 onClick = onDownloadPhone,
                 enabled = !busy,
                 colors = ButtonDefaults.buttonColors(containerColor = Palette.Sun, contentColor = Palette.SunInk),
@@ -289,7 +283,7 @@ private fun DownloadBlock(d: DownloadUi, onOpenDownloads: () -> Unit) {
                     color = Palette.Ink,
                     modifier = Modifier.weight(1f),
                 )
-                Button(
+                AppButton(
                     onClick = onOpenDownloads,
                     colors = ButtonDefaults.buttonColors(containerColor = Palette.Sun, contentColor = Palette.SunInk),
                     modifier = Modifier.padding(start = 8.dp),

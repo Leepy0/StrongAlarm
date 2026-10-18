@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import io.github.leepy0.strongalarm.ui.components.AppSecondaryButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -34,7 +34,7 @@ fun HistoryScreen(lines: List<String>, onBack: () -> Unit, onTestAlarm: () -> Un
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 8.dp),
                 )
-                OutlinedButton(onClick = onTestAlarm, modifier = Modifier.padding(top = 24.dp)) {
+                AppSecondaryButton(onClick = onTestAlarm, modifier = Modifier.padding(top = 24.dp)) {
                     Text("10초 뒤 테스트 알람", color = Palette.Ink)
                 }
             }
