@@ -426,7 +426,7 @@ fun AppRoot(
         runCatching { ctx.startActivity(Updater.browserIntent(url)) }.onFailure { notify("브라우저를 열 수 없어요") }
     }
 
-    /** 시스템 다운로드로 APK 받기 → 다운로드 완료 알림·목록에서 시스템 설치 */
+    /** 폰은 앱이 직접 받아 시스템 설치 화면을 열고, 워치는 시스템 다운로드로 받음 */
     fun download(kind: ApkDownloads.Kind) {
         val r = newRemote ?: return
         val phone = kind == ApkDownloads.Kind.PHONE
@@ -709,8 +709,12 @@ fun AppRoot(
                             onDownloadPhone = { download(ApkDownloads.Kind.PHONE) },
                             onDownloadWatch = { download(ApkDownloads.Kind.WATCH) },
                             onOpenDownloads = {
-                                runCatching { ctx.startActivity(ApkDownloads.openDownloadsIntent()) }
-                                    .onFailure { notify("내 파일 > 다운로드에서 StrongAlarm APK를 눌러 설치해주세요") }
+                                if (apkDownload?.kind == ApkDownloads.Kind.PHONE) {
+                                    if (!ApkDownloads.install(ctx)) notify("설치를 허용한 뒤 다시 눌러주세요")
+                                } else {
+                                    runCatching { ctx.startActivity(ApkDownloads.openDownloadsIntent()) }
+                                        .onFailure { notify("내 파일 > 다운로드에서 StrongAlarm APK를 눌러 설치해주세요") }
+                                }
                             },
                             onOpenReleasePage = { openUrl(Updater.RELEASE_PAGE) },
                             onReRingEnabled = { v -> Stores.settings.update(ctx) { it.copy(reRingEnabled = v) } },

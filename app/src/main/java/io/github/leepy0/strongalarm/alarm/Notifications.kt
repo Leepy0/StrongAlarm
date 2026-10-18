@@ -15,7 +15,6 @@ import io.github.leepy0.strongalarm.data.Stores
 import io.github.leepy0.strongalarm.ui.AlarmActivity
 import io.github.leepy0.strongalarm.ui.MainActivity
 import io.github.leepy0.strongalarm.ui.pretty
-import io.github.leepy0.strongalarm.update.UpdateActionReceiver
 
 object Notifications {
     const val CH_RING = "alarm_ring"
@@ -200,7 +199,7 @@ object Notifications {
         ctx.getSystemService(NotificationManager::class.java).notify(ID_FULL_SCREEN, n)
     }
 
-    /** 새 버전 알림: 누르면 앱의 설정 탭(변경 내용), [받기]는 시스템 다운로드로 APK 받기 */
+    /** 새 버전 알림: 누르면 앱의 설정 탭(변경 내용), 앱에서 받기 */
     fun showUpdate(ctx: Context, title: String, text: String) {
         val open = PendingIntent.getActivity(
             ctx, 31,
@@ -209,18 +208,12 @@ object Notifications {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val download = PendingIntent.getBroadcast(
-            ctx, 32,
-            Intent(ctx, UpdateActionReceiver::class.java).setAction(UpdateActionReceiver.ACTION_START),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
         val n = Notification.Builder(ctx, CH_UPDATE)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle(title)
             .setContentText(text)
             .setAutoCancel(true)
             .setContentIntent(open)
-            .addAction(Notification.Action.Builder(null, "받기", download).build())
             .build()
         ctx.getSystemService(NotificationManager::class.java).notify(ID_UPDATE, n)
     }

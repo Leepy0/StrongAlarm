@@ -12,6 +12,8 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 업데이트: 앱이 받은 APK의 시스템 설치 화면을 연다(설치는 사용자가 확인) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -78,10 +80,16 @@
             </intent-filter>
         </receiver>
 
-        <!-- 새 버전 알림 [받기] (앱 자신의 PendingIntent만) -->
-        <receiver
-            android:name=".update.UpdateActionReceiver"
-            android:exported="false" />
+        <!-- 받은 업데이트 APK를 설치 화면에 넘기기 위한 FileProvider -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <!-- 새 버전 확인 (6시간 주기) -->
         <service
