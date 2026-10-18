@@ -26,7 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Button
+import io.github.leepy0.strongalarm.ui.components.AppButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -86,7 +86,7 @@ class SmartThingsLoginActivity : ComponentActivity() {
                 Column(Modifier.fillMaxSize().background(Palette.Night)) {
                     TopAppBar(
                         title = { Text("SmartThings 로그인", style = MaterialTheme.typography.titleLarge) },
-                        navigationIcon = { IconButton(onClick = ::finish) { AppIcon(R.drawable.ic_back, Palette.Ink) } },
+                        navigationIcon = { IconButton(onClick = ::finish) { AppIcon(R.drawable.ic_back, Palette.SunText) } },
                         colors = TopAppBarDefaults.topAppBarColors(containerColor = Palette.Night, titleContentColor = Palette.Ink),
                     )
                     // 로딩 진행률 (확정형). 끝나면 같은 높이를 비워 화면이 튀지 않게
@@ -174,7 +174,7 @@ class SmartThingsLoginActivity : ComponentActivity() {
             Text("로그인하지 못했어요", style = MaterialTheme.typography.headlineSmall, color = Palette.Ink)
             Text(message, style = MaterialTheme.typography.bodyLarge, color = Palette.Mist, modifier = Modifier.padding(top = 8.dp))
             Row(Modifier.padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
+                AppButton(
                     onClick = ::retry,
                     colors = ButtonDefaults.buttonColors(containerColor = Palette.Sun, contentColor = Palette.SunInk),
                 ) { Text("다시 시도") }

@@ -14,11 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
+import io.github.leepy0.strongalarm.ui.components.AppButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import io.github.leepy0.strongalarm.ui.components.AppSecondaryButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -109,7 +109,7 @@ fun LightsScreen(
                 }
                 val test = state.test
                 if (test == null) {
-                    OutlinedButton(
+                    AppSecondaryButton(
                         onClick = onTest,
                         enabled = state.dimmers.isNotEmpty(),
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
@@ -252,7 +252,7 @@ private fun CredentialsForm(
             label = { Text("Redirect URI") }, singleLine = true, colors = fieldColors,
         )
         val canLogin = clientId.isNotBlank() && (state.hasSecret || secret.isNotBlank())
-        Button(
+        AppButton(
             onClick = {
                 onSave(clientId.trim(), secret, redirect.trim())
                 secret = ""

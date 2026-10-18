@@ -21,11 +21,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import io.github.leepy0.strongalarm.ui.components.AppButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import io.github.leepy0.strongalarm.ui.components.AppSecondaryButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -189,12 +189,12 @@ fun HomeScreen(
         Spacer(Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             state.next?.let { next ->
-                Button(
+                AppButton(
                     onClick = { onDayClick(next.date) },
                     colors = ButtonDefaults.buttonColors(containerColor = Palette.Sun, contentColor = Palette.SunInk),
                 ) { Text("${next.date.shortRelative(state.today)}만 바꾸기") }
             }
-            OutlinedButton(onClick = onEditBaseTime) {
+            AppSecondaryButton(onClick = onEditBaseTime) {
                 Text("매일 ${state.baseTime.hhmm()}", color = Palette.Ink)
             }
         }
@@ -345,12 +345,12 @@ private fun PendingOffCard(s: PendingStreak, onConfirmOff: () -> Unit, onRingOff
             modifier = Modifier.padding(top = 8.dp),
         )
         Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
+            AppButton(
                 onClick = onConfirmOff,
                 colors = ButtonDefaults.buttonColors(containerColor = Palette.MoonSoft, contentColor = Palette.Moon),
                 modifier = Modifier.weight(1f),
             ) { Text("안 울려도 돼요") }
-            OutlinedButton(onClick = onRingOff, modifier = Modifier.weight(1f)) { Text("그래도 울리기", color = Palette.Ink) }
+            AppSecondaryButton(onClick = onRingOff, modifier = Modifier.weight(1f)) { Text("그래도 울리기", color = Palette.Ink) }
         }
     }
 }

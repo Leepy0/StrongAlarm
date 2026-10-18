@@ -7,10 +7,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
+import io.github.leepy0.strongalarm.ui.components.AppButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import io.github.leepy0.strongalarm.ui.components.AppSecondaryButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -85,7 +85,7 @@ fun DaySheetContent(
             if (day.ring) {
                 val showConfirm = confirmable && !day.confirmed
                 if (day.pendingOff) {
-                    Button(
+                    AppButton(
                         onClick = onConfirmOff,
                         enabled = !locked,
                         modifier = Modifier.fillMaxWidth(),
@@ -95,17 +95,17 @@ fun DaySheetContent(
                     }
                 }
                 if (showConfirm) {
-                    Button(onClick = onConfirm, modifier = Modifier.fillMaxWidth(), colors = sunButton) {
+                    AppButton(onClick = onConfirm, modifier = Modifier.fillMaxWidth(), colors = sunButton) {
                         Text("울림 확인 (아침에 못 끄게)")
                     }
                 }
                 val timeLabel = if (day.overridden) "시각 다시 바꾸기" else "이 날만 다른 시각으로"
                 if (showConfirm || day.pendingOff) {
-                    OutlinedButton(onClick = onPickTime, modifier = Modifier.fillMaxWidth()) { Text(timeLabel, color = Palette.Ink) }
+                    AppSecondaryButton(onClick = onPickTime, modifier = Modifier.fillMaxWidth()) { Text(timeLabel, color = Palette.Ink) }
                 } else {
-                    Button(onClick = onPickTime, modifier = Modifier.fillMaxWidth(), colors = sunButton) { Text(timeLabel) }
+                    AppButton(onClick = onPickTime, modifier = Modifier.fillMaxWidth(), colors = sunButton) { Text(timeLabel) }
                 }
-                OutlinedButton(onClick = onSkip, enabled = !locked, modifier = Modifier.fillMaxWidth()) {
+                AppSecondaryButton(onClick = onSkip, enabled = !locked, modifier = Modifier.fillMaxWidth()) {
                     Text("쉬는 날로 바꾸기", color = if (locked) Palette.Faint else Palette.Moon)
                 }
                 if (day.overridden) {
@@ -119,10 +119,10 @@ fun DaySheetContent(
                     }
                 }
             } else {
-                Button(onClick = onRingAnyway, modifier = Modifier.fillMaxWidth(), colors = sunButton) {
+                AppButton(onClick = onRingAnyway, modifier = Modifier.fillMaxWidth(), colors = sunButton) {
                     Text("이 날은 ${baseTime.hhmm()}에 울리기")
                 }
-                OutlinedButton(onClick = onPickTime, modifier = Modifier.fillMaxWidth()) {
+                AppSecondaryButton(onClick = onPickTime, modifier = Modifier.fillMaxWidth()) {
                     Text("다른 시각에 울리기", color = Palette.Ink)
                 }
                 if (day.manualOff) {

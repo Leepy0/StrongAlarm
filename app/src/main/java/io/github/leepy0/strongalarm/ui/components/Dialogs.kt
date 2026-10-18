@@ -122,7 +122,7 @@ fun <K> MultiSelectDialog(
                             Checkbox(
                                 checked = item.key in selected,
                                 onCheckedChange = null,
-                                colors = CheckboxDefaults.colors(checkedColor = Palette.SunText, checkmarkColor = Palette.Night),
+                                colors = CheckboxDefaults.colors(checkedColor = Palette.SunText, checkmarkColor = Palette.SunInk),
                             )
                             Column(Modifier.padding(start = 12.dp)) {
                                 Text(item.title, style = MaterialTheme.typography.bodyLarge)
