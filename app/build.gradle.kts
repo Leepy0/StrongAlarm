@@ -88,6 +88,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.play.services.wearable)
+    implementation(libs.play.services.location)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

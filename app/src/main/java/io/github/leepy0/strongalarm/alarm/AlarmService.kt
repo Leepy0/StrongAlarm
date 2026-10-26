@@ -110,6 +110,7 @@ class AlarmService : Service() {
     private var ringDate: LocalDate = LocalDate.now()
     private var wakeWatch: WakeWatch? = null
     private var watchTracker: StepTracker? = null
+    private var driveDetector: DriveDetector? = null
     private var watchSteps = 0
     private var watchJob: Job? = null
     /** 전날 울림 확인 → 쉬는 날 버튼 무시 */
@@ -526,6 +527,10 @@ class AlarmService : Service() {
         watchSteps = 0
         wakeWatch = WakeWatch(System.currentTimeMillis(), idleMin * 60_000L)
         mode = Mode.WATCHING
+        // 운전 중엔 걸음·폰 사용이 없어 잠든 걸로 오판 → 차량 이동이 잡히면 감시 종료
+        driveDetector = DriveDetector(this) { what -> onMoving(what) }.also {
+            if (!it.start()) log("차량 이동 감지 안 함 — 신체 활동 권한 없음")
+        }
         try {
             startForeground(
                 Notifications.ID_WATCH,
@@ -571,7 +576,16 @@ class AlarmService : Service() {
         }
     }
 
+    private fun onMoving(what: String) {
+        if (mode != Mode.WATCHING) return
+        log("기상 후 감시 종료 — ${what} 이동 감지")
+        endWatching()
+        finishIdle()
+    }
+
     private fun endWatching() {
+        driveDetector?.stop()
+        driveDetector = null
         watchJob?.cancel()
         watchJob = null
         watchTracker?.stop()
